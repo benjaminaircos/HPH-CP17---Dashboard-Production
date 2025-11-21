@@ -10,19 +10,26 @@ let charts = {};
 function convertirDateExcel(valeur) {
     console.log('🔍 Conversion demandée pour:', valeur, '(type:', typeof valeur, ')');
     
-    // Si c'est déjà une date valide (string), la retourner
+    // Si c'est déjà une date valide (string avec / ou -), la retourner
     if (typeof valeur === 'string' && (valeur.includes('/') || valeur.includes('-'))) {
         console.log('✅ Date déjà au bon format string:', valeur);
         return valeur;
     }
     
+    // ✨ NOUVEAU : Si c'est un STRING qui contient un nombre, le convertir en nombre
+    let valeurNumerique = valeur;
+    if (typeof valeur === 'string' && !isNaN(valeur) && valeur.trim() !== '') {
+        valeurNumerique = parseFloat(valeur);
+        console.log('🔄 String numérique converti:', valeur, '→', valeurNumerique);
+    }
+    
     // Si c'est un nombre (date série Excel)
-    if (typeof valeur === 'number' && valeur > 1000) {
-        console.log('🔄 Conversion date Excel numérique:', valeur);
+    if (typeof valeurNumerique === 'number' && valeurNumerique > 1000) {
+        console.log('🔄 Conversion date Excel numérique:', valeurNumerique);
         // Excel stocke les dates comme le nombre de jours depuis le 01/01/1900
         // Attention : Excel a un bug connu (compte 1900 comme année bissextile)
         const dateExcelEpoch = new Date(1899, 11, 30); // 30 décembre 1899
-        const dateMs = dateExcelEpoch.getTime() + (valeur * 86400000); // 86400000 ms = 1 jour
+        const dateMs = dateExcelEpoch.getTime() + (valeurNumerique * 86400000); // 86400000 ms = 1 jour
         const dateObj = new Date(dateMs);
         
         // Retourner au format ISO (YYYY-MM-DD)
