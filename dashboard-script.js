@@ -6,6 +6,33 @@ let donneesCompletes = [];
 let donneesFiltrees = [];
 let charts = {};
 
+// ✨ Fonction pour convertir les dates Excel (format numérique) en vraies dates
+function convertirDateExcel(valeur) {
+    // Si c'est déjà une date valide (string), la retourner
+    if (typeof valeur === 'string' && (valeur.includes('/') || valeur.includes('-'))) {
+        return valeur;
+    }
+    
+    // Si c'est un nombre (date série Excel)
+    if (typeof valeur === 'number' && valeur > 1000) {
+        // Excel stocke les dates comme le nombre de jours depuis le 01/01/1900
+        // Attention : Excel a un bug connu (compte 1900 comme année bissextile)
+        const dateExcelEpoch = new Date(1899, 11, 30); // 30 décembre 1899
+        const dateMs = dateExcelEpoch.getTime() + (valeur * 86400000); // 86400000 ms = 1 jour
+        const dateObj = new Date(dateMs);
+        
+        // Retourner au format ISO (YYYY-MM-DD)
+        const annee = dateObj.getFullYear();
+        const mois = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const jour = String(dateObj.getDate()).padStart(2, '0');
+        
+        return `${annee}-${mois}-${jour}`;
+    }
+    
+    // Sinon, retourner tel quel
+    return valeur;
+}
+
 // Objectifs par défaut (stockés dans localStorage)
 let objectifs = {
     prodEquipe: 5000,
@@ -60,7 +87,21 @@ async function chargerDonnees() {
         const data = await response.json();
         
         // Les données sont dans la propriété "value" de la réponse Excel
-        donneesCompletes = data.value || data || [];
+        let rawData = data.value || data || [];
+        
+        // ✨ Convertir toutes les dates Excel en vraies dates
+        donneesCompletes = rawData.map(ligne => {
+            // Créer une copie de la ligne
+            const ligneCopie = { ...ligne };
+            
+            // Convertir la date si elle existe
+            if (ligneCopie['Date']) {
+                ligneCopie['Date'] = convertirDateExcel(ligneCopie['Date']);
+            }
+            
+            return ligneCopie;
+        });
+        
         donneesFiltrees = [...donneesCompletes];
         
         console.log('✅ Données chargées:', donneesCompletes.length, 'lignes');
