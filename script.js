@@ -199,38 +199,36 @@ function collecterDonnees() {
     const tableBody = document.getElementById('tableBody');
     const rows = tableBody.rows;
     
-    if (rows.length === 0) {
-        afficherMessage('⚠️ Aucune donnée à enregistrer', 'error');
-        return null;
-    }
-    
     const lignes = [];
     
-    // Parcourir toutes les lignes
+    // Parcourir toutes les lignes et ne garder que celles avec une heure sélectionnée
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const heure = row.querySelector('.heure').value;
         
-        // Validation : l'heure doit être sélectionnée
-        if (!heure) {
-            afficherMessage(`⚠️ Veuillez sélectionner une heure pour la ligne ${i + 1}`, 'error');
-            return null;
+        // Si l'heure est sélectionnée, on ajoute la ligne
+        if (heure && heure !== "") {
+            lignes.push({
+                heure: heure,
+                prod: row.querySelector('.prod').value || "0",
+                rebuts: row.querySelector('.rebuts').value || "0",
+                equipement: row.querySelector('.equipement').value || "",
+                equipement_duree: row.querySelector('.equipement_duree').value || "0",
+                qualite: row.querySelector('.qualite').value || "",
+                qualite_duree: row.querySelector('.qualite_duree').value || "0",
+                organisation: row.querySelector('.organisation').value || "",
+                organisation_duree: row.querySelector('.organisation_duree').value || "0",
+                autres: row.querySelector('.autres').value || "",
+                autres_duree: row.querySelector('.autres_duree').value || "0",
+                commentaire: row.querySelector('.commentaire').value || ""
+            });
         }
-        
-        lignes.push({
-            heure: heure,
-            prod: row.querySelector('.prod').value || "0",
-            rebuts: row.querySelector('.rebuts').value || "0",
-            equipement: row.querySelector('.equipement').value || "",
-            equipement_duree: row.querySelector('.equipement_duree').value || "0",
-            qualite: row.querySelector('.qualite').value || "",
-            qualite_duree: row.querySelector('.qualite_duree').value || "0",
-            organisation: row.querySelector('.organisation').value || "",
-            organisation_duree: row.querySelector('.organisation_duree').value || "0",
-            autres: row.querySelector('.autres').value || "",
-            autres_duree: row.querySelector('.autres_duree').value || "0",
-            commentaire: row.querySelector('.commentaire').value || ""
-        });
+    }
+    
+    // Vérifier qu'il y a au moins une ligne à envoyer
+    if (lignes.length === 0) {
+        afficherMessage('⚠️ Veuillez remplir au moins une ligne avec une heure', 'error');
+        return null;
     }
     
     return {
