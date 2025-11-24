@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HPH CP17 - Dashboard Production</title>
+    <link rel="stylesheet" href="dashboard-style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 HPH CP17 - Dashboard Production</h1>
+            <p class="subtitle">Analyse et suivi en temps réel</p>
+            <div class="header-actions">
+                <a href="index.html" class="btn btn-secondary">📝 Retour à la saisie</a>
+                <button onclick="chargerDonnees()" class="btn btn-primary">🔄 Actualiser</button>
+            </div>
+        </header>
+
+        <!-- Filtres -->
+        <div class="filters-section">
+            <h2>🔍 Filtres</h2>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label for="filterDateDebut">📅 Date Début :</label>
+                    <input type="date" id="filterDateDebut">
+                </div>
+                <div class="filter-group">
+                    <label for="filterDateFin">📅 Date Fin :</label>
+                    <input type="date" id="filterDateFin">
+                </div>
+                <div class="filter-group">
+                    <label for="filterEquipe">👥 Équipe :</label>
+                    <select id="filterEquipe">
+                        <option value="">Toutes les équipes</option>
+                        <option value="Matin">Matin</option>
+                        <option value="Soir">Soir</option>
+                        <option value="Nuit">Nuit</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button onclick="appliquerFiltres()" class="btn btn-filter">✅ Appliquer</button>
+                    <button onclick="reinitialiserFiltres()" class="btn btn-reset-filter">🔄 Réinitialiser</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Objectifs -->
+        <div class="objectifs-section">
+            <h2>🎯 Objectif de Production</h2>
+            <div class="objectifs-grid">
+                <div class="objectif-group">
+                    <label for="objectifProdEquipe">📦 Objectif Production / Équipe :</label>
+                    <input type="number" id="objectifProdEquipe" value="5000" min="0">
+                </div>
+                <div class="objectif-group">
+                    <label for="objectifTauxRebuts">📊 Objectif Taux Rebuts Max (%) :</label>
+                    <input type="number" id="objectifTauxRebuts" value="5" min="0" max="100" step="0.1">
+                </div>
+                <div class="objectif-group">
+                    <label for="objectifTRS">📈 Objectif TRS (%) :</label>
+                    <input type="number" id="objectifTRS" value="85" min="0" max="100" step="0.1">
+                </div>
+                <div class="objectif-group">
+                    <button onclick="appliquerObjectifs()" class="btn btn-objectif">💾 Enregistrer les Objectifs</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-section">
+            <div class="kpi-card" id="kpiCardProdTotal">
+                <div class="kpi-icon">📦</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Production Totale</div>
+                    <div class="kpi-value" id="kpiProdTotal">0</div>
+                    <div class="kpi-objectif" id="kpiObjectifProd"></div>
+                    <div class="kpi-status" id="kpiStatusProd"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Production Bonne</div>
+                    <div class="kpi-value" id="kpiProdBonne">0</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">❌</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Rebuts</div>
+                    <div class="kpi-value" id="kpiRebuts">0</div>
+                </div>
+            </div>
+            <div class="kpi-card" id="kpiCardTauxRebuts">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Taux de Rebuts</div>
+                    <div class="kpi-value" id="kpiTauxRebuts">0%</div>
+                    <div class="kpi-objectif" id="kpiObjectifRebuts"></div>
+                    <div class="kpi-status" id="kpiStatusRebuts"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">⏱️</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Temps d'Arrêt Total</div>
+                    <div class="kpi-value" id="kpiTempsArret">0 min</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphiques -->
+        <div class="charts-section">
+            <div class="chart-container">
+                <h3>📈 Production par Heure</h3>
+                <canvas id="chartProductionHeure"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>📊 TRS par Heure</h3>
+                <canvas id="chartTRS"></canvas>
+            </div>
+        </div>
+
+        <div class="charts-section">
+            <div class="chart-container">
+                <h3>📊 Production par Équipe</h3>
+                <canvas id="chartProductionEquipe"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>⏱️ Durée des Arrêts par Catégorie</h3>
+                <canvas id="chartDureeArrets"></canvas>
+            </div>
+        </div>
+
+        <!-- Tableau détaillé -->
+        <div class="table-section">
+            <h2>📋 Données Détaillées</h2>
+            <div class="table-controls">
+                <button onclick="exporterCSV()" class="btn btn-export">💾 Exporter en CSV</button>
+            </div>
+            <div class="table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Trigramme</th>
+                            <th>Équipe</th>
+                            <th>Heure</th>
+                            <th>Prod Bonne</th>
+                            <th>Rebuts</th>
+                            <th>Équipement</th>
+                            <th>Durée Équip.</th>
+                            <th>Qualité</th>
+                            <th>Durée Qualité</th>
+                            <th>Organisation</th>
+                            <th>Durée Org.</th>
+                            <th>Autres</th>
+                            <th>Durée Autres</th>
+                            <th>Commentaire</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                        <!-- Les données seront insérées ici -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Message de chargement -->
+        <div id="loadingMessage" class="loading-message">
+            <div class="spinner"></div>
+            <p>Chargement des données...</p>
+        </div>
+
+        <!-- Message d'erreur -->
+        <div id="errorMessage" class="error-message" style="display: none;">
+            <p>❌ Erreur lors du chargement des données. Veuillez réessayer.</p>
+        </div>
+    </div>
+
+    <script src="dashboard-script.js"></script>
+</body>
+</html>
