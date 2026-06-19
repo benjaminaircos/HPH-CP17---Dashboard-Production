@@ -1,0 +1,192 @@
+/* ============================================================
+   HPH CP17 — shared.css
+   Charte graphique AIRCOS — fond sombre
+   ============================================================ */
+
+:root {
+  --bg:     #0f1117;  --bg2:    #161b27;  --bg3:    #1e2535;
+  --border: #2a3245;  --accent: #e8502a;
+  --ok:     #2dd4a0;  --warn:   #f0b429;  --danger: #e8502a;
+  --blue:   #378add;  --purple: #a78bfa;
+  --text:   #e2e8f0;  --muted:  #7a8ba8;
+  --mono: 'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --ui:   'Inter','Segoe UI',system-ui,sans-serif;
+}
+
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html, body { height:100%; }
+body { background:var(--bg); color:var(--text); font-family:var(--ui); font-size:14px; }
+
+/* ── HEADER ── */
+header {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:0 24px; display:flex; align-items:center;
+  justify-content:space-between; position:sticky; top:0; z-index:100; height:52px;
+}
+.logo { font-size:17px; font-weight:800; letter-spacing:.06em; }
+.logo span { color:var(--accent); }
+.header-sub { font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; border-left:1px solid var(--border); padding-left:18px; margin-left:20px; }
+.header-left { display:flex; align-items:center; }
+.header-right { display:flex; align-items:center; gap:16px; }
+#live-clock { font-family:var(--mono); font-size:12px; color:var(--muted); }
+.btn-refresh { padding:5px 13px; background:none; border:1px solid var(--border); color:var(--muted); border-radius:4px; font-size:12px; cursor:pointer; font-family:var(--ui); }
+.btn-refresh:hover { border-color:var(--accent); color:var(--text); }
+
+/* ── BANDEAU STATUT MACHINE ── */
+#statut-machine {
+  display:flex; align-items:center; gap:16px;
+  padding:8px 24px; font-size:12px; border-bottom:1px solid var(--border); background:var(--bg2);
+}
+.statut-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.statut-marche .statut-dot { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+.statut-arret  .statut-dot { background:var(--danger); box-shadow:0 0 8px var(--danger); }
+.statut-label { font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:11px; }
+.statut-marche .statut-label { color:var(--ok); }
+.statut-arret  .statut-label { color:var(--danger); }
+.statut-since  { color:var(--muted); }
+.statut-cadence { color:var(--blue); font-family:var(--mono); }
+.statut-sep  { width:1px; height:16px; background:var(--border); }
+.refresh-tag { margin-left:auto; font-size:10px; color:var(--muted); background:var(--bg3); border:1px solid var(--border); border-radius:3px; padding:2px 8px; font-family:var(--mono); }
+
+/* ── BARRE FILTRES ── */
+.filter-bar {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:10px 24px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+}
+.filter-group { display:flex; align-items:center; gap:8px; }
+.filter-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+select, input[type=date], input[type=number], input[type=text] {
+  background:var(--bg3); border:1px solid var(--border); color:var(--text);
+  padding:5px 10px; border-radius:4px; font-size:12px; font-family:var(--ui);
+}
+select:focus, input:focus { outline:1px solid var(--accent); }
+.btn-apply { padding:5px 14px; background:var(--accent); border:none; color:#fff; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--ui); }
+.btn-reset  { padding:5px 14px; background:none; border:1px solid var(--border); color:var(--muted); border-radius:4px; font-size:12px; cursor:pointer; font-family:var(--ui); }
+.btn-reset:hover { border-color:var(--muted); color:var(--text); }
+
+/* ── MAIN ── */
+main { padding:20px 24px; }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted);
+  margin-bottom:12px; margin-top:20px; display:flex; align-items:center; gap:10px;
+}
+.section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* ── PANEL (carte) ── */
+.panel { background:var(--bg2); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.panel-header { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.panel-title  { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:700; }
+.panel-body   { padding:16px; min-height:200px; }
+
+/* ── KPI CARDS (compact — Saisie & Manager) ── */
+.kpi-band { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px; }
+.kpi-card { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:14px 16px; position:relative; overflow:hidden; }
+.kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.kpi-card.ok::before     { background:var(--ok); }
+.kpi-card.warn::before   { background:var(--warn); }
+.kpi-card.danger::before { background:var(--danger); }
+.kpi-card.blue::before   { background:var(--blue); }
+.kpi-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
+.kpi-value { font-size:28px; font-weight:800; font-family:var(--mono); line-height:1; }
+.kpi-value.ok     { color:var(--ok); }
+.kpi-value.warn   { color:var(--warn); }
+.kpi-value.danger { color:var(--danger); }
+.kpi-value.blue   { color:var(--blue); }
+.kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+
+/* ── KPI CARDS (grand — Dashboard Production) ── */
+.prod-kpi-band { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+.prod-kpi { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:24px 22px; text-align:center; position:relative; overflow:hidden; }
+.prod-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+.prod-kpi.ok::before     { background:var(--ok); }
+.prod-kpi.warn::before   { background:var(--warn); }
+.prod-kpi.danger::before { background:var(--danger); }
+.prod-kpi.blue::before   { background:var(--blue); }
+.prod-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:10px; }
+.prod-kpi-value { font-size:52px; font-weight:900; font-family:var(--mono); line-height:1; }
+.prod-kpi-value.ok     { color:var(--ok); }
+.prod-kpi-value.warn   { color:var(--warn); }
+.prod-kpi-value.danger { color:var(--danger); }
+.prod-kpi-value.blue   { color:var(--blue); }
+.prod-kpi-sub { font-size:12px; color:var(--muted); margin-top:6px; }
+
+/* ── GRILLES GRAPHIQUES ── */
+.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.charts-grid.one { grid-template-columns:1fr; }
+
+/* ── BANDEAU OBJECTIFS (Manager) ── */
+.objectifs-band {
+  background:var(--bg2); border:1px solid var(--border); border-radius:6px;
+  padding:14px 18px; margin-bottom:18px; display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;
+}
+.objectif-group { display:flex; flex-direction:column; gap:4px; }
+.objectif-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.objectif-input { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:4px; font-size:13px; font-family:var(--mono); width:120px; }
+.objectif-input:focus { outline:1px solid var(--accent); border-color:var(--accent); }
+.objectif-sep { width:1px; height:40px; background:var(--border); align-self:flex-end; }
+.objectif-save { padding:7px 16px; background:var(--accent); border:none; color:#fff; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--ui); align-self:flex-end; }
+.future-badge { font-size:9px; background:rgba(167,139,250,.12); border:1px solid rgba(167,139,250,.3); color:var(--purple); border-radius:3px; padding:1px 6px; margin-left:4px; vertical-align:middle; }
+
+/* ── TABLEAU DONNÉES ── */
+.table-wrap { overflow-x:auto; max-height:420px; overflow-y:auto; }
+table.data-table { width:100%; border-collapse:collapse; font-size:12px; }
+table.data-table thead tr { background:var(--bg3); position:sticky; top:0; z-index:2; }
+table.data-table th { padding:8px 12px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+table.data-table td { padding:7px 12px; border-bottom:1px solid rgba(42,50,69,.5); vertical-align:middle; }
+table.data-table tr:hover td { background:var(--bg3); }
+.badge-equipe { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:600; font-family:var(--mono); }
+.badge-matin  { background:rgba(240,180,41,.12); color:var(--warn); }
+.badge-soir   { background:rgba(55,138,221,.12);  color:var(--blue); }
+.badge-nuit   { background:rgba(167,139,250,.12); color:var(--purple); }
+
+/* ── TABLEAU SAISIE HORAIRE ── */
+.saisie-header { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
+.form-group  { display:flex; flex-direction:column; gap:5px; }
+.form-label  { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.form-input  { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:7px 10px; border-radius:4px; font-size:13px; font-family:var(--ui); }
+.form-input:focus { outline:1px solid var(--accent); border-color:var(--accent); }
+
+table.saisie-table { width:100%; border-collapse:collapse; font-size:12px; }
+table.saisie-table thead tr:first-child th { border-bottom:1px solid var(--border); }
+table.saisie-table th { padding:8px 10px; text-align:center; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#fff; border-right:1px solid rgba(255,255,255,.08); white-space:nowrap; }
+table.saisie-table td { padding:5px 6px; border-bottom:1px solid rgba(42,50,69,.5); border-right:1px solid rgba(42,50,69,.3); }
+table.saisie-table tr:hover td { background:var(--bg3); }
+.th-base    { background:var(--bg3); color:var(--muted)!important; }
+.th-equip   { background:rgba(55,138,221,.20);  border-left:2px solid var(--border)!important; }
+.th-qual    { background:rgba(45,212,160,.15);  border-left:2px solid var(--border)!important; }
+.th-org     { background:rgba(167,139,250,.15); border-left:2px solid var(--border)!important; }
+.th-autres  { background:rgba(240,180,41,.15);  border-left:2px solid var(--border)!important; }
+.th-comment { background:var(--bg3); color:var(--muted)!important; border-left:2px solid var(--border)!important; }
+table.saisie-table td.sep { border-left:2px solid var(--border)!important; }
+table.saisie-table td.td-heure { font-family:var(--mono); font-weight:700; color:var(--blue); text-align:center; padding:8px 10px; background:rgba(55,138,221,.04); }
+
+table.saisie-table input[type=number],
+table.saisie-table input[type=text] { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 6px; border-radius:3px; font-size:12px; font-family:var(--ui); }
+table.saisie-table input:focus { outline:1px solid var(--accent); }
+table.saisie-table select { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 4px; border-radius:3px; font-size:11px; font-family:var(--ui); }
+
+.saisie-actions { display:flex; justify-content:center; gap:16px; margin-top:20px; }
+.btn-save-main { padding:10px 32px; background:linear-gradient(135deg,#4a5dd4,#6a4adc); border:none; color:#fff; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:var(--ui); }
+.btn-save-main:hover { opacity:.9; }
+.btn-reinit { padding:10px 24px; background:linear-gradient(135deg,#d44a8a,#dc4a6a); border:none; color:#fff; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:var(--ui); }
+
+/* ── INTERVAL SELECTOR ── */
+.interval-select { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:3px 8px; border-radius:3px; font-size:11px; font-family:var(--mono); cursor:pointer; }
+
+/* ── MSG LOADING / ERROR ── */
+.msg-loading { text-align:center; padding:40px; color:var(--muted); font-size:13px; }
+.msg-error   { text-align:center; padding:20px; color:var(--danger); font-size:13px; background:rgba(232,80,42,.08); border:1px solid rgba(232,80,42,.3); border-radius:6px; margin:16px 0; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--bg2); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px) {
+  .kpi-band, .prod-kpi-band { grid-template-columns:repeat(2,1fr); }
+  .charts-grid { grid-template-columns:1fr; }
+  .saisie-header { grid-template-columns:repeat(2,1fr); }
+}
