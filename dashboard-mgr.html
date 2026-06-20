@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIRCOS — CP17 Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="logo">AIR<span>COS</span></div>
+    <span class="header-sub">HPH · Compacteuse CP17 · Manager</span>
+  </div>
+  <div class="header-right">
+    <span id="live-clock"></span>
+    <button class="btn-refresh" onclick="chargerEtAfficher()">↻ Actualiser</button>
+  </div>
+</header>
+
+<!-- BANDEAU STATUT MACHINE -->
+<div id="statut-machine" class="statut-marche">
+  <div class="statut-dot"></div>
+  <span class="statut-label">—</span>
+  <div class="statut-sep"></div>
+  <span class="statut-since"></span>
+  <div class="statut-sep"></div>
+  <span class="statut-cadence"></span>
+  <span class="refresh-tag"></span>
+</div>
+
+<!-- FILTRES -->
+<div class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-label">Date début</span>
+    <input type="date" id="f-debut">
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Date fin</span>
+    <input type="date" id="f-fin">
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Équipe</span>
+    <select id="f-equipe">
+      <option value="">Toutes</option>
+      <option>Matin</option><option>Soir</option><option>Nuit</option>
+    </select>
+  </div>
+  <button class="btn-apply" onclick="appliquerFiltresUI()">Appliquer</button>
+  <button class="btn-reset"  onclick="reinitialiserUI()">Réinitialiser</button>
+</div>
+
+<div id="msg-loading" class="msg-loading" style="display:none;">⏳ Chargement des données...</div>
+<div id="msg-error"   class="msg-error"   style="display:none;">❌ Impossible de charger les données.</div>
+
+<main>
+  <!-- OBJECTIFS -->
+  <div class="section-title">Objectifs</div>
+  <div class="objectifs-band">
+    <div class="objectif-group">
+      <label class="objectif-label">Code article</label>
+      <input class="objectif-input" type="text" id="obj-code" placeholder="Ex: U556003" style="width:120px;"
+             onchange="rechercherEmpreintes()" oninput="rechercherEmpreintes()">
+    </div>
+    <div class="objectif-sep"></div>
+    <div class="objectif-group">
+      <label class="objectif-label">Gamme planning (pcs/équipe)</label>
+      <input class="objectif-input" type="number" id="obj-gamme" value="6000" style="width:140px;">
+    </div>
+    <div class="objectif-group">
+      <label class="objectif-label">Objectif Taux Rebuts (%)</label>
+      <input class="objectif-input" type="number" id="obj-rebuts" value="4.0" step="0.1" style="width:100px;">
+    </div>
+    <div class="objectif-group">
+      <label class="objectif-label">Objectif TRS Global (%)</label>
+      <input class="objectif-input" type="number" id="obj-trs" value="85" style="width:90px;">
+    </div>
+    <div class="objectif-group">
+      <label class="objectif-label">Nb empreintes</label>
+      <input class="objectif-input" type="number" id="obj-empreintes" value="1" style="width:80px;">
+    </div>
+    <button class="objectif-save" onclick="enregistrerObjectifs()">Enregistrer</button>
+    <span id="obj-msg" style="font-size:11px;color:var(--ok);align-self:flex-end;"></span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-band">
+    <div class="kpi-card ok">
+      <div class="kpi-label">Production Bonne</div>
+      <div class="kpi-value ok" id="kpi-prod-bonne">—</div>
+      <div class="kpi-sub" id="kpi-prod-obj">Objectif — pcs</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Taux Rebuts</div>
+      <div class="kpi-value warn" id="kpi-taux-rebuts">—</div>
+      <div class="kpi-sub" id="kpi-rebuts-nc">— pcs NC</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">TRS Global</div>
+      <div class="kpi-value blue" id="kpi-trs">—%</div>
+      <div class="kpi-sub" id="kpi-trs-obj">Objectif —%</div>
+    </div>
+    <div class="kpi-card danger">
+      <div class="kpi-label">Temps Arrêt Total</div>
+      <div class="kpi-value danger" id="kpi-arret">— min</div>
+      <div class="kpi-sub" id="kpi-arret-nj">dont — non justifié</div>
+    </div>
+  </div>
+
+  <!-- Graphiques Production & Qualité -->
+  <div class="section-title">Production & Qualité</div>
+  <div class="charts-grid">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Production par heure (pcs)</span></div>
+      <div class="panel-body"><canvas id="chart-prod-heure"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">TRS Global par heure (%)</span></div>
+      <div class="panel-body"><canvas id="chart-trs-heure"></canvas></div>
+    </div>
+  </div>
+  <div class="charts-grid" style="margin-bottom:14px;">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Temps non justifié par heure (min)</span></div>
+      <div class="panel-body"><canvas id="chart-temps-nj"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Taux de performance par heure (%)</span></div>
+      <div class="panel-body"><canvas id="chart-performance"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Cadence IoT -->
+  <div class="section-title">Cadence IoT</div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-header">
+      <span class="panel-title">Cadence mesurée · source IoT (pcs/min)</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:10px;color:var(--muted);">Intervalle :</span>
+        <select class="interval-select" id="cadence-interval" onchange="rafraichirCadence()">
+          <option value="15">15 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="60">1 h</option>
+        </select>
+      </div>
+    </div>
+    <div class="panel-body"><canvas id="chart-cadence-iot"></canvas></div>
+  </div>
+
+  <!-- Historique saisies -->
+  <div class="section-title">Historique des saisies</div>
+  <div class="panel">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Date</th><th>Référence</th><th>Trigramme</th><th>Équipe</th>
+          <th>Heure</th><th>Prod Bonne</th><th>Rebuts</th>
+          <th>Équipement</th><th>Durée</th>
+          <th>Qualité</th><th>Durée</th>
+          <th>Organisation</th><th>Durée</th>
+          <th>Autres</th><th>Durée</th>
+          <th>Commentaire</th>
+        </tr></thead>
+        <tbody id="historique-body">
+          <tr><td colspan="16" style="text-align:center;color:var(--muted);padding:20px;">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="shared.js"></script>
+<script>
+// ── Init ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    startClock('live-clock');
+    chargerObjectifsLocaux();
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('f-debut').value = today;
+    document.getElementById('f-fin').value   = today;
+    document.getElementById('f-equipe').value = determinerEquipeEnCours();
+    chargerEtAfficher();
+});
+
+function chargerObjectifsLocaux() {
+    const stored = localStorage.getItem('objectifs_hph_cp17');
+    if (stored) {
+        const o = JSON.parse(stored);
+        objectifs = { ...objectifs, ...o };
+        if (o.gamme)       document.getElementById('obj-gamme').value      = o.gamme;
+        if (o.tauxRebuts)  document.getElementById('obj-rebuts').value     = o.tauxRebuts;
+        if (o.trs)         document.getElementById('obj-trs').value        = o.trs;
+        if (o.nbEmpreintes)document.getElementById('obj-empreintes').value = o.nbEmpreintes;
+    }
+}
+
+function enregistrerObjectifs() {
+    objectifs.gamme       = parseFloat(document.getElementById('obj-gamme').value)      || 6000;
+    objectifs.tauxRebuts  = parseFloat(document.getElementById('obj-rebuts').value)     || 4;
+    objectifs.trs         = parseFloat(document.getElementById('obj-trs').value)        || 85;
+    objectifs.nbEmpreintes= parseInt(document.getElementById('obj-empreintes').value)   || 1;
+    localStorage.setItem('objectifs_hph_cp17', JSON.stringify(objectifs));
+    const msg = document.getElementById('obj-msg');
+    msg.textContent = '✅ Enregistré';
+    setTimeout(() => msg.textContent = '', 3000);
+    if (donneesFiltrees.length) { afficherKPIs(); afficherGraphiques(); }
+}
+
+function rechercherEmpreintes() {
+    const code = document.getElementById('obj-code').value.trim().toUpperCase();
+    if (!code || !donneesEmpreintes.length) return;
+    const emp = donneesEmpreintes.find(r =>
+        (r['Code article']||r['Code_article']||'').toString().trim().toUpperCase() === code
+    );
+    if (!emp) { 
+        document.getElementById('obj-msg').textContent = '⚠️ Code article non trouvé dans les références';
+        setTimeout(() => document.getElementById('obj-msg').textContent = '', 3000);
+        return; 
+    }
+    const gamme  = parseFloat(emp['Gamme_Planning']  || emp['gamme_planning']  || 0);
+    const rebuts = parseFloat(emp['Objectif_Taux_Rebuts'] || emp['objectif_taux_rebuts'] || 0);
+    const nbEmp  = parseInt(emp["nombre d'empreintes"] || emp['Nb_Empreintes'] || 1);
+    if (gamme)  { document.getElementById('obj-gamme').value  = gamme;  objectifs.gamme  = gamme; }
+    if (rebuts) { document.getElementById('obj-rebuts').value = rebuts; objectifs.tauxRebuts = rebuts; }
+    if (nbEmp)  { document.getElementById('obj-empreintes').value = nbEmp; objectifs.nbEmpreintes = nbEmp; }
+    // TRS auto = gamme / (cadence_nominale × durée_équipe_minutes) × 100
+    // Durée équipe = 480 min (8h standard)
+    if (gamme && objectifs.cadence) {
+        const dureeEquipeMin = 480;
+        const trsAuto = Math.round((gamme / (objectifs.cadence * dureeEquipeMin)) * 100);
+        document.getElementById('obj-trs').value = trsAuto;
+        objectifs.trs = trsAuto;
+    }
+    const msg = document.getElementById('obj-msg');
+    msg.textContent = `✅ Objectifs chargés depuis les références (${nbEmp} empreinte(s))`;
+    setTimeout(() => msg.textContent = '', 4000);
+    if (donneesFiltrees.length) { afficherKPIs(); afficherGraphiques(); }
+}
+
+// ── Chargement ────────────────────────────────────────────────
+async function chargerEtAfficher() {
+    document.getElementById('msg-loading').style.display = 'block';
+    document.getElementById('msg-error').style.display   = 'none';
+
+    const ok = await chargerDonnees(URL_LECTURE_SAISIE, URL_LECTURE_IOT, URL_EMPREINTES);
+    document.getElementById('msg-loading').style.display = 'none';
+    if (!ok) { document.getElementById('msg-error').style.display = 'block'; return; }
+
+    appliquerFiltresUI();
+    mettreAJourBandeauStatut();
+}
+
+// ── Filtres ───────────────────────────────────────────────────
+function appliquerFiltresUI() {
+    const debut  = document.getElementById('f-debut').value;
+    const fin    = document.getElementById('f-fin').value;
+    const equipe = document.getElementById('f-equipe').value;
+    donneesFiltrees = filtrerDonnees(debut, fin, equipe || null);
+    // GARDE LA CADENCE IoT MÊME SANS DONNÉES SAISIE
+    // Auto-objectifs via empreintes si code article détecté
+    if (donneesFiltrees.length && donneesEmpreintes.length) {
+        const ref = donneesFiltrees[0]['Référence'] || donneesFiltrees[0]['Reference'] || '';
+        if (ref) {
+            const emp = donneesEmpreintes.find(r =>
+                (r['Code article']||r['Code_article']||'').toString().trim().toUpperCase() === ref.trim().toUpperCase()
+            );
+            if (emp) {
+                const gamme = parseFloat(emp['Gamme_Planning']||emp['gamme_planning']||0);
+                const rebuts = parseFloat(emp['Objectif_Taux_Rebuts']||emp['objectif_taux_rebuts']||0);
+                const nbEmp  = parseInt(emp["nombre d'empreintes"]||emp['Nb_Empreintes']||1);
+                if (gamme)  { document.getElementById('obj-gamme').value  = gamme;  objectifs.gamme  = gamme; }
+                if (rebuts) { document.getElementById('obj-rebuts').value = rebuts; objectifs.tauxRebuts = rebuts; }
+                if (nbEmp)  { document.getElementById('obj-empreintes').value = nbEmp; objectifs.nbEmpreintes = nbEmp; }
+                document.getElementById('obj-code').value = ref.toUpperCase();
+                // TRS auto = gamme / (cadence_nominale * 60) * 100
+                if (gamme && objectifs.cadence) {
+                    const trsAuto = Math.round((gamme / (objectifs.cadence * 60)) * 100);
+                    document.getElementById('obj-trs').value = trsAuto;
+                    objectifs.trs = trsAuto;
+                }
+            }
+        }
+    }
+    if (!donneesFiltrees.length) {
+        // Vider tous les graphiques
+        ['prodHeure','trsHeure','tempsNJ','performance','cadenceIoT'].forEach(k => {
+            if (charts[k]) { charts[k].destroy(); delete charts[k]; }
+        });
+        // Vider l'historique
+        document.getElementById('historique-body').innerHTML =
+            '<tr><td colspan="16" style="text-align:center;color:var(--muted);padding:20px;">Aucune donnée pour cette période</td></tr>';
+        // Vider les KPIs
+        ['kpi-prod-bonne','kpi-taux-rebuts','kpi-trs','kpi-arret'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '—';
+        });
+        ['kpi-prod-obj','kpi-rebuts-nc','kpi-trs-obj','kpi-arret-nj'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '';
+        });
+        // Afficher quand même la cadence IoT si données IoT disponibles
+        rafraichirCadence();
+        return;
+    }
+    afficherKPIs();
+    afficherGraphiques();
+    afficherHistorique();
+}
+
+function reinitialiserUI() {
+    const today  = new Date().toISOString().split('T')[0];
+    const equipe = determinerEquipeEnCours();
+    document.getElementById('f-debut').value  = today;
+    document.getElementById('f-fin').value    = today;
+    document.getElementById('f-equipe').value = equipe;
+    appliquerFiltresUI();
+}
+
+// ── KPIs ─────────────────────────────────────────────────────
+function afficherKPIs() {
+    if (!donneesFiltrees.length) {
+        ['kpi-prod-bonne','kpi-taux-rebuts','kpi-trs','kpi-arret'].forEach(id => {
+            document.getElementById(id).textContent = '—';
+        });
+        return;
+    }
+    const k = calculerKPIsData(donneesFiltrees);
+
+    document.getElementById('kpi-prod-bonne').textContent = k.prodBonne.toLocaleString('fr-FR');
+    document.getElementById('kpi-prod-obj').textContent   = `Objectif ${objectifs.gamme.toLocaleString('fr-FR')} pcs`;
+
+    document.getElementById('kpi-taux-rebuts').textContent = `${k.tauxRebuts.toFixed(1)} %`;
+    document.getElementById('kpi-rebuts-nc').textContent   = `${k.rebuts.toLocaleString('fr-FR')} pcs NC · Max ${objectifs.tauxRebuts}%`;
+
+    document.getElementById('kpi-trs').textContent     = `${k.trs.toFixed(1)}%`;
+    document.getElementById('kpi-trs-obj').textContent = `Objectif ${objectifs.trs}%`;
+
+    // Temps non justifié approximé
+    const { map, heures } = agregerParHeure(donneesFiltrees);
+    let tempsNJ = 0;
+    heures.forEach(h => {
+        const d = map[h];
+        const ecart = Math.max(0, objectifs.cadence*60 - (d.bonne+d.rebuts));
+        tempsNJ += Math.max(0, (ecart/objectifs.cadence) - d.arret);
+    });
+    document.getElementById('kpi-arret').textContent    = `${k.arret} min`;
+    document.getElementById('kpi-arret-nj').textContent = `dont ${Math.round(tempsNJ)} min non justifié`;
+}
+
+// ── Graphiques ────────────────────────────────────────────────
+function afficherGraphiques() {
+    if (!donneesFiltrees.length) return;
+    const { map, heures } = agregerParHeure(donneesFiltrees);
+
+    const prodBonne = heures.map(h => map[h].bonne);
+    const trsData   = heures.map(h => {
+        const total = map[h].bonne + map[h].rebuts;
+        return objectifs.cadence*60 > 0 ? Math.min((total/(objectifs.cadence*60))*100, 150) : 0;
+    });
+    const njData = heures.map(h => {
+        const d = map[h];
+        const ecart = Math.max(0, objectifs.cadence*60 - (d.bonne+d.rebuts));
+        return Math.max(0, (ecart/objectifs.cadence) - d.arret);
+    });
+    const perfData = heures.map(h => {
+        const d = map[h];
+        const prodTotale = d.bonne + d.rebuts;
+        const tempsProductif = Math.max(0, 60 - d.arret);
+        if (tempsProductif <= 0) return null;
+        return Math.min((prodTotale / (objectifs.cadence * tempsProductif)) * 100, 150);
+    });
+
+    chartProductionHeure('chart-prod-heure', heures, prodBonne, objectifs.gamme);
+    chartTRSHeure('chart-trs-heure', heures, trsData, objectifs.trs);
+    chartTempsNonJustifie('chart-temps-nj', heures, njData);
+    chartPerformance('chart-performance', heures, perfData);
+    rafraichirCadence();
+}
+
+function rafraichirCadence() {
+    const intervalMin = parseInt(document.getElementById('cadence-interval').value);
+    // Utiliser les filtres actifs pour date/équipe, même sans données saisie
+    const dateISO = document.getElementById('f-debut').value || new Date().toISOString().split('T')[0];
+    const equipe  = document.getElementById('f-equipe').value || determinerEquipeEnCours();
+    // N'afficher que si on a des données IoT
+    if (!donneesIoT.length) return;
+    chartCadenceIoT('chart-cadence-iot', dateISO, equipe, intervalMin);
+}
+
+// ── Historique ────────────────────────────────────────────────
+function afficherHistorique() {
+    const tbody = document.getElementById('historique-body');
+    if (!donneesFiltrees.length) {
+        tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:var(--muted);padding:20px;">Aucune donnée</td></tr>';
+        return;
+    }
+    tbody.innerHTML = donneesFiltrees.map(l => {
+        const eq = l['Équipe'] || '';
+        const badge = eq ? `<span class="badge-equipe badge-${eq.toLowerCase()}">${eq}</span>` : '—';
+        return `<tr>
+          <td>${dateAffichage(normaliserDate(l['Date']))}</td>
+          <td>${l['Référence']||'—'}</td>
+          <td>${l['Trigramme']||l['Jour']||'—'}</td>
+          <td>${badge}</td>
+          <td>${l['Heure']||'—'}</td>
+          <td>${(l['Prod Bonne']||l['Prod_x0020_Bonne']||0).toLocaleString('fr-FR')}</td>
+          <td>${l['Rebuts']||0}</td>
+          <td>${l['Équipement']||'—'}</td>
+          <td>${l['Équipement Durée']||l['Équipement_x0020_Durée']||0}</td>
+          <td>${l['Qualité']||'—'}</td>
+          <td>${l['Qualité Durée']||l['Qualité_x0020_Durée']||0}</td>
+          <td>${l['Organisation']||'—'}</td>
+          <td>${l['Organisation Durée']||l['Organisation_x0020_Durée']||0}</td>
+          <td>${l['Autres']||'—'}</td>
+          <td>${l['Autres Durée']||l['Autres_x0020_Durée']||0}</td>
+          <td>${l['Commentaire']||'—'}</td>
+        </tr>`;
+    }).join('');
+}
+</script>
+</body>
+</html>
