@@ -154,7 +154,7 @@ function heureSel(defaut) {
 }
 
 function initTableau() {
-    const defauts = ['1h','2h','3h'];
+    const defauts = ['1h','2h','3h','4h','5h'];
     document.getElementById('saisie-body').innerHTML = defauts.map((h, i) => `
     <tr data-idx="${i}">
       <td class="td-heure">${heureSel(h)}</td>
