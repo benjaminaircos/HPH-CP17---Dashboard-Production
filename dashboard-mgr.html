@@ -35,7 +35,7 @@
 </div>
 
 <!-- FILTRES -->
-<div class="filter-bar">
+<div class="filter-bar" id="barre-filtres">
   <div class="filter-group">
     <span class="filter-label">Date</span>
     <input type="date" id="f-debut">
@@ -56,6 +56,7 @@
 
 <main>
   <!-- OBJECTIFS -->
+  <div id="bloc-objectifs">
   <div class="section-title">Objectifs</div>
   <div class="objectifs-band">
     <div class="objectif-group">
@@ -83,6 +84,7 @@
     <button class="objectif-save" onclick="enregistrerObjectifs()">Enregistrer</button>
     <span id="obj-msg" style="font-size:11px;color:var(--ok);align-self:flex-end;"></span>
   </div>
+  </div><!-- /bloc-objectifs -->
 
   <div id="bloc-suivi">
   <!-- KPIs -->
@@ -199,8 +201,14 @@
           <button data-val="jour">Jour</button>
           <button data-val="semaine">Semaine</button>
           <button data-val="mois" class="on">Mois</button>
-          <button data-val="trimestre">Trim.</button>
-          <button data-val="annee">Année</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Raccourci</span>
+        <div class="seg">
+          <button type="button" onclick="analyseRaccourci('semaine')">Semaine</button>
+          <button type="button" onclick="analyseRaccourci('mois')">Mois</button>
+          <button type="button" onclick="analyseRaccourci('annee')">Année</button>
         </div>
       </div>
       <div class="filter-group">
@@ -558,10 +566,14 @@ const AN = { gran:'mois', axe:'global', ind:'trs' };
 function analyseToggle() {
     const bloc = document.getElementById('bloc-analyse');
     const suivi = document.getElementById('bloc-suivi');
+    const filtres = document.getElementById('barre-filtres');
+    const objectifsBloc = document.getElementById('bloc-objectifs');
     const btn = document.getElementById('btn-analyse');
     const actif = bloc.style.display === 'none' || !bloc.style.display;
     if (actif) {
         suivi.style.display = 'none';
+        if (filtres) filtres.style.display = 'none';
+        if (objectifsBloc) objectifsBloc.style.display = 'none';
         bloc.style.display = 'block';
         btn.textContent = '📉 Suivi';
         btn.style.background = 'var(--accent)';
@@ -570,10 +582,14 @@ function analyseToggle() {
         analyseRender();
     } else {
         bloc.style.display = 'none';
+        if (filtres) filtres.style.display = 'flex';
+        if (objectifsBloc) objectifsBloc.style.display = 'block';
         suivi.style.display = 'block';
         btn.textContent = '🔬 Analyse';
         btn.style.background = 'none';
         btn.style.color = 'var(--accent)';
+        // Reconstruire les graphiques du suivi (Chart.js les redimensionne mal quand ils sont cachés)
+        if (donneesFiltrees && donneesFiltrees.length) { afficherKPIs(); afficherGraphiques(); }
     }
 }
 
@@ -590,6 +606,26 @@ function analyseInitDates() {
         const today = new Date().toISOString().split('T')[0];
         dDeb.value = today; dFin.value = today;
     }
+}
+
+// Raccourcis de période : remplissent « Du … au … » (jusqu'à aujourd'hui)
+function analyseRaccourci(type) {
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const today = new Date();
+    let debut;
+    if (type === 'semaine') {                         // lundi de la semaine en cours
+        const jour = (today.getDay() + 6) % 7;        // lundi=0 … dimanche=6
+        const lundi = new Date(today);
+        lundi.setDate(today.getDate() - jour);
+        debut = iso(lundi);
+    } else if (type === 'mois') {                      // 1er du mois en cours
+        debut = iso(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else {                                           // 1er janvier de l'année en cours
+        debut = iso(new Date(today.getFullYear(), 0, 1));
+    }
+    document.getElementById('an-debut').value = debut;
+    document.getElementById('an-fin').value = iso(today);
+    analyseRender();
 }
 
 function analyseGetLignes() {
@@ -798,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div style="border-left:3px solid var(--purple);padding:10px 14px;margin-bottom:14px;background:rgba(167,139,250,.04);border-radius:0 4px 4px 0;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">Principe</div>
-        <div style="color:var(--muted);font-size:11px;">Le mode Analyse agrège les saisies sur une plage de dates selon une granularité (jour / semaine ISO / mois / trimestre / année) et un axe de comparaison (global / équipe / référence / opérateur). Chaque valeur est calculée par regroupement, indépendamment du suivi journalier.</div>
+        <div style="color:var(--muted);font-size:11px;">Le mode Analyse agrège les saisies sur une plage de dates selon une granularité (jour / semaine ISO / mois) et un axe de comparaison (global / équipe / référence / opérateur). Des raccourcis (semaine / mois / année en cours) remplissent automatiquement la plage. Chaque valeur est calculée par regroupement, indépendamment du suivi journalier.</div>
       </div>
 
       <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;">
@@ -888,7 +924,8 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;color:var(--muted);font-size:12px;line-height:1.6;">
         L'analyse agrège les saisies sur la <strong style="color:var(--text);">plage de dates</strong> choisie (initialisée automatiquement sur la première et la dernière date disponibles). On combine librement :
         <div style="margin-top:8px;">
-          • <strong style="color:var(--text);">Granularité</strong> — regroupe l'axe du temps : Jour, Semaine (ISO), Mois, Trimestre, Année.<br>
+          • <strong style="color:var(--text);">Granularité</strong> — regroupe l'axe du temps : Jour, Semaine (ISO), Mois.<br>
+          • <strong style="color:var(--text);">Raccourci</strong> — remplit la plage « Du … au … » sur la semaine, le mois ou l'année en cours (jusqu'à aujourd'hui). Indépendant de la granularité.<br>
           • <strong style="color:var(--text);">Comparaison</strong> — superpose des séries : Global, par Équipe, par Référence, ou par Opérateur (trigramme).<br>
           • <strong style="color:var(--text);">Indicateur</strong> — la grandeur affichée dans le graphique et le tableau croisé.
         </div>

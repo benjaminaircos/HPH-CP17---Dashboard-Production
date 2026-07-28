@@ -680,9 +680,9 @@ function analyseBucketKey(dateISO, gran) {
 }
 
 function analyseSerieKey(l, axe) {
-    if (axe === 'equipe')    return l['Équipe'] || l['Equipe'] || '—';
-    if (axe === 'reference') return l['Référence'] || l['Reference'] || '—';
-    if (axe === 'operateur') return l['Trigramme'] || l['Jour'] || '—';
+    if (axe === 'equipe')    return ((l['Équipe'] || l['Equipe'] || '—') + '').trim() || '—';
+    if (axe === 'reference') return ((l['Référence'] || l['Reference'] || '—') + '').trim().toUpperCase() || '—';
+    if (axe === 'operateur') return ((l['Trigramme'] || l['Jour'] || '—') + '').trim().toUpperCase() || '—';
     return 'Global';
 }
 
