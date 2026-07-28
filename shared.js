@@ -629,3 +629,226 @@ function chartCadenceIoT(canvasId, dateISO, equipe, intervalMin) {
         }
     });
 }
+
+// ============================================================
+// ANALYSE MULTI-PÉRIODE (page Manager)
+// Agrégation Jour / Semaine / Mois / Trimestre / Année
+// Comparaison Global / Équipe / Référence / Opérateur
+// TRS pondéré par la durée réelle d'équipe (getDureeEquipe)
+// Réutilise : getDureeEquipe, getCadenceMaxEffective, getNbEmpreintes,
+//             calculerMarcheIoTParHeure, normaliserDate, CHART_COLORS,
+//             baseChartOpts, makeOrUpdate
+// ============================================================
+
+const ANALYSE_PALETTE = [
+    '#378add', '#e8502a', '#2dd4a0', '#a78bfa', '#f0b429',
+    '#4fd1c5', '#f6885a', '#7f9cf5', '#ed64a6', '#68d391',
+    '#63b3ed', '#f6ad55', '#b794f4', '#4fd1c5', '#fc8181'
+];
+
+// Métadonnées des indicateurs
+const ANALYSE_INDIC = {
+    trs:           { label:'TRS Global',        unite:'%',   type:'line', obj:() => objectifs.trs },
+    performance:   { label:'Performance',       unite:'%',   type:'line', obj:() => 90 },
+    disponibilite: { label:'Disponibilité IoT', unite:'%',   type:'line', obj:() => null },
+    tauxRebuts:    { label:'Taux de rebuts',    unite:'%',   type:'line', obj:() => objectifs.tauxRebuts },
+    prodBonne:     { label:'Production bonne',  unite:'pcs', type:'bar',  obj:() => null },
+    prodTotale:    { label:'Production totale', unite:'pcs', type:'bar',  obj:() => null },
+    rebuts:        { label:'Rebuts',            unite:'pcs', type:'bar',  obj:() => null },
+    arrets:        { label:"Temps d'arrêt",     unite:'min', type:'bar',  obj:() => null }
+};
+
+// ── Bucket temporel ──────────────────────────────────────────
+function analyseIsoWeek(dateISO) {
+    const [y, m, j] = dateISO.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1, j));
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - day);
+    const yStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const wk = Math.ceil((((d - yStart) / 86400000) + 1) / 7);
+    return { year: d.getUTCFullYear(), week: wk };
+}
+
+function analyseBucketKey(dateISO, gran) {
+    const [y, m, j] = dateISO.split('-');
+    if (gran === 'jour')      return { key: dateISO, label: `${j}/${m}` };
+    if (gran === 'semaine')   { const w = analyseIsoWeek(dateISO); const wk = String(w.week).padStart(2,'0'); return { key:`${w.year}-S${wk}`, label:`S${wk} ${String(w.year).slice(2)}` }; }
+    if (gran === 'trimestre') { const q = Math.floor((parseInt(m,10)-1)/3)+1; return { key:`${y}-T${q}`, label:`T${q} ${y}` }; }
+    if (gran === 'annee')     return { key: y, label: y };
+    const noms = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+    return { key:`${y}-${m}`, label:`${noms[parseInt(m,10)-1]} ${String(y).slice(2)}` };
+}
+
+function analyseSerieKey(l, axe) {
+    if (axe === 'equipe')    return l['Équipe'] || l['Equipe'] || '—';
+    if (axe === 'reference') return l['Référence'] || l['Reference'] || '—';
+    if (axe === 'operateur') return l['Trigramme'] || l['Jour'] || '—';
+    return 'Global';
+}
+
+function analyseArretLigne(l) {
+    return parseInt(l['Équipement Durée'] || l['Équipement_x0020_Durée'] || 0)
+         + parseInt(l['Qualité Durée']     || l['Qualité_x0020_Durée']     || 0)
+         + parseInt(l['Organisation Durée']|| l['Organisation_x0020_Durée']|| 0)
+         + parseInt(l['Autres Durée']       || l['Autres_x0020_Durée']       || 0);
+}
+
+// ── Agrégation principale ────────────────────────────────────
+function analyseAgreger(lignes, gran, axe) {
+    // Pass 1 : caractéristiques de chaque shift (date|équipe)
+    const shift = {};
+    const hourArret = {};
+    const marcheCache = {};
+    lignes.forEach(l => {
+        const dISO = normaliserDate(l['Date']); if (!dISO || dISO.length < 8) return;
+        const eq = l['Équipe'] || l['Equipe'] || '—';
+        const h = l['Heure'] || '?';
+        const sk = dISO + '|' + eq;
+        if (!shift[sk]) {
+            let marcheTot = marcheCache[sk];
+            if (marcheTot === undefined) {
+                const mm = calculerMarcheIoTParHeure(dISO, eq);
+                marcheTot = Object.keys(mm).length ? Object.values(mm).reduce((a, b) => a + b, 0) : null;
+                marcheCache[sk] = marcheTot;
+            }
+            shift[sk] = { dISO, eq, heures: new Set(), duree: getDureeEquipe(eq, dISO), marche: marcheTot };
+        }
+        shift[sk].heures.add(h);
+        const hk = sk + '|' + h;
+        hourArret[hk] = (hourArret[hk] || 0) + analyseArretLigne(l);
+    });
+
+    // Pass 2 : agrégation (bucket × série)
+    const buckets = {}, seriesSet = new Set(), data = {}, capSeen = new Set();
+    const cellFor = (bk, sk) => {
+        (data[bk] = data[bk] || {});
+        if (!data[bk][sk]) data[bk][sk] = {
+            bonne:0, rebuts:0, arretsTotal:0,
+            arretsCat:{ eq:0, qual:0, org:0, autres:0 },
+            dureeMin:0, dureeIoT:0, marcheDispo:0, theoCapDuree:0, theoCapMarche:0, iotPresent:false
+        };
+        return data[bk][sk];
+    };
+
+    lignes.forEach(l => {
+        const dISO = normaliserDate(l['Date']); if (!dISO || dISO.length < 8) return;
+        const eq = l['Équipe'] || l['Equipe'] || '—';
+        const h = l['Heure'] || '?';
+        const b = analyseBucketKey(dISO, gran);
+        const serie = analyseSerieKey(l, axe);
+        buckets[b.key] = b.label; seriesSet.add(serie);
+        const c = cellFor(b.key, serie);
+
+        // Numérateur (toutes les lignes)
+        c.bonne  += parseInt(l['Prod Bonne'] || l['Prod_x0020_Bonne'] || 0);
+        c.rebuts += parseInt(l['Rebuts'] || 0);
+        const aEq = parseInt(l['Équipement Durée']||0), aQ = parseInt(l['Qualité Durée']||0);
+        const aO = parseInt(l['Organisation Durée']||0), aA = parseInt(l['Autres Durée']||0);
+        c.arretsCat.eq += aEq; c.arretsCat.qual += aQ; c.arretsCat.org += aO; c.arretsCat.autres += aA;
+        c.arretsTotal += (aEq + aQ + aO + aA);
+
+        // Capacité / temps : une seule fois par cellule-heure
+        const hk = dISO + '|' + eq + '|' + h;
+        if (!capSeen.has(hk)) {
+            capSeen.add(hk);
+            const s = shift[dISO + '|' + eq];
+            const nbH = Math.max(1, s.heures.size);
+            const minParH = s.duree / nbH;
+            const ref = l['Référence'] || l['Reference'] || '';
+            let cadPcs = getCadenceMaxEffective(dISO, eq, ref) * getNbEmpreintes(ref);
+            if (!(cadPcs > 0)) cadPcs = (objectifs.cadence || 15) * getNbEmpreintes(ref);
+            const arretH = hourArret[hk] || 0;
+
+            let marcheH;
+            if (s.marche !== null) { marcheH = s.marche / nbH; c.iotPresent = true; c.marcheDispo += marcheH; c.dureeIoT += minParH; }
+            else                   { marcheH = Math.max(0, minParH - arretH); }
+
+            c.dureeMin += minParH;
+            c.theoCapDuree  += cadPcs * minParH;
+            c.theoCapMarche += cadPcs * marcheH;
+        }
+    });
+
+    return {
+        series: Array.from(seriesSet).sort(),
+        buckets: Object.keys(buckets).sort().map(k => ({ key:k, label:buckets[k] })),
+        data
+    };
+}
+
+// ── Calcul d'un indicateur ───────────────────────────────────
+function analyseMetrique(c, ind) {
+    if (!c) return null;
+    const totale = c.bonne + c.rebuts;
+    switch (ind) {
+        case 'prodTotale':    return totale;
+        case 'prodBonne':     return c.bonne;
+        case 'rebuts':        return c.rebuts;
+        case 'arrets':        return c.arretsTotal;
+        case 'tauxRebuts':    return totale > 0 ? (c.rebuts / totale) * 100 : null;
+        case 'trs':           return c.theoCapDuree  > 0 ? Math.min((totale / c.theoCapDuree)  * 100, 150) : null;
+        case 'performance':   return c.theoCapMarche > 0 ? Math.min((totale / c.theoCapMarche) * 100, 150) : null;
+        case 'disponibilite': return (c.iotPresent && c.dureeIoT > 0) ? Math.min((c.marcheDispo / c.dureeIoT) * 100, 120) : null;
+        default: return null;
+    }
+}
+
+// Fusionne toutes les cellules d'un résultat d'agrégation en un seul agrégat global
+function analyseFusion(res) {
+    const g = { bonne:0, rebuts:0, arretsTotal:0, arretsCat:{eq:0,qual:0,org:0,autres:0},
+                dureeMin:0, dureeIoT:0, marcheDispo:0, theoCapDuree:0, theoCapMarche:0, iotPresent:false };
+    Object.values(res.data).forEach(bucket => Object.values(bucket).forEach(c => {
+        g.bonne+=c.bonne; g.rebuts+=c.rebuts; g.arretsTotal+=c.arretsTotal;
+        g.arretsCat.eq+=c.arretsCat.eq; g.arretsCat.qual+=c.arretsCat.qual;
+        g.arretsCat.org+=c.arretsCat.org; g.arretsCat.autres+=c.arretsCat.autres;
+        g.dureeMin+=c.dureeMin; g.dureeIoT+=c.dureeIoT; g.marcheDispo+=c.marcheDispo;
+        g.theoCapDuree+=c.theoCapDuree; g.theoCapMarche+=c.theoCapMarche;
+        g.iotPresent = g.iotPresent || c.iotPresent;
+    }));
+    return g;
+}
+
+// ── Graphique d'évolution ────────────────────────────────────
+function analyseChartEvolution(canvasId, res, ind) {
+    const meta = ANALYSE_INDIC[ind];
+    const labels = res.buckets.map(b => b.label);
+    const monoSerie = res.series.length === 1 && res.series[0] === 'Global';
+
+    const datasets = res.series.map((serie, i) => {
+        const col = ANALYSE_PALETTE[i % ANALYSE_PALETTE.length];
+        const vals = res.buckets.map(b => {
+            const v = analyseMetrique(res.data[b.key] && res.data[b.key][serie], ind);
+            return v === null ? null : Math.round(v * 10) / 10;
+        });
+        return {
+            label: monoSerie ? meta.label : serie,
+            data: vals,
+            backgroundColor: meta.type === 'bar' ? col + 'bb' : col + '22',
+            borderColor: col,
+            borderWidth: 2, borderRadius: meta.type === 'bar' ? 3 : 0,
+            pointRadius: meta.type === 'line' ? 3 : 0,
+            fill: false, tension: 0.25, spanGaps: true
+        };
+    });
+
+    const objVal = meta.obj ? meta.obj() : null;
+    if (objVal !== null && objVal !== undefined) {
+        datasets.push({
+            label: `Objectif (${objVal}${meta.unite})`,
+            data: labels.map(() => objVal), type: 'line',
+            borderColor: CHART_COLORS.warn, borderDash: [8, 4], borderWidth: 2,
+            pointRadius: 0, fill: false, order: 99
+        });
+    }
+
+    const yMax = meta.unite === '%' ? (ind === 'disponibilite' ? 120 : 170) : null;
+    const opts = baseChartOpts(`${meta.label} (${meta.unite})`, yMax);
+    if (meta.unite === '%') opts.scales.y.ticks = { ...opts.scales.y.ticks, callback: v => v + '%' };
+    opts.plugins = {
+        legend: { display: !monoSerie, labels: { color: CHART_COLORS.tick, font:{size:10}, boxWidth:12 } },
+        tooltip: { callbacks: { label: c => c.parsed.y === null ? `${c.dataset.label} : n/d` : `${c.dataset.label} : ${c.parsed.y}${meta.unite}` } }
+    };
+    opts.scales.x.ticks = { ...opts.scales.x.ticks, maxRotation: 45 };
+
+    makeOrUpdate('analyse', canvasId, { type: meta.type, data: { labels, datasets }, options: opts });
+}

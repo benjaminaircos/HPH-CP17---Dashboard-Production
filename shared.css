@@ -200,3 +200,24 @@ table.saisie-table select { width:100%; background:var(--bg3); border:1px solid 
   .charts-grid { grid-template-columns:1fr; }
   .saisie-header { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ── MODE ANALYSE — sélecteur segmenté ── */
+.seg { display:inline-flex; border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+.seg button {
+  border:none; background:var(--bg3); color:var(--muted);
+  padding:5px 11px; font-size:12px; cursor:pointer; font-family:var(--ui);
+  border-right:1px solid var(--border);
+}
+.seg button:last-child { border-right:none; }
+.seg button:hover { color:var(--text); background:var(--bg2); }
+.seg button.on { background:var(--accent); color:#fff; font-weight:600; }
+
+#bloc-analyse .kpi-value { font-size:24px; }
+#an-table td, #an-table th { text-align:center; }
+#an-table th:first-child, #an-table td:first-child { text-align:left; position:sticky; left:0; background:var(--bg2); }
+#an-table thead th { background:var(--bg3); }
+
+@media(max-width:900px) {
+  #an-kpis { grid-template-columns:repeat(2,1fr) !important; }
+  .filter-bar .seg button { padding:5px 8px; font-size:11px; }
+}

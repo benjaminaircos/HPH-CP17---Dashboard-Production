@@ -18,6 +18,7 @@
   <div class="header-right">
     <span id="live-clock"></span>
     <button class="btn-refresh" onclick="chargerEtAfficher()">↻ Actualiser</button>
+    <button id="btn-analyse" class="btn-refresh" onclick="analyseToggle()" style="border-color:var(--accent);color:var(--accent);">🔬 Analyse</button>
     <button class="btn-refresh" onclick="document.getElementById('modal-info').style.display='flex'" style="border-color:var(--blue);color:var(--blue);">ℹ️ Info</button>
   </div>
 </header>
@@ -83,6 +84,7 @@
     <span id="obj-msg" style="font-size:11px;color:var(--ok);align-self:flex-end;"></span>
   </div>
 
+  <div id="bloc-suivi">
   <!-- KPIs -->
   <div class="kpi-band">
     <div class="kpi-card ok">
@@ -173,6 +175,78 @@
       </table>
     </div>
   </div>
+  </div><!-- /bloc-suivi -->
+
+  <!-- ===================== BLOC ANALYSE ===================== -->
+  <div id="bloc-analyse" style="display:none;">
+    <div style="display:flex;align-items:center;gap:10px;margin:20px 0 12px;">
+      <span style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);">Analyse temporelle</span>
+      <span style="flex:1;height:1px;background:var(--border);"></span>
+      <button class="btn-refresh" onclick="document.getElementById('modal-analyse').style.display='flex'" style="border-color:var(--blue);color:var(--blue);">ℹ️ Fonctionnement</button>
+    </div>
+
+    <!-- Contrôles -->
+    <div class="filter-bar" style="border-radius:6px;border:1px solid var(--border);flex-wrap:wrap;gap:18px;">
+      <div class="filter-group">
+        <span class="filter-label">Du</span>
+        <input type="date" id="an-debut">
+        <span class="filter-label">au</span>
+        <input type="date" id="an-fin">
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Granularité</span>
+        <div class="seg" data-seg="gran">
+          <button data-val="jour">Jour</button>
+          <button data-val="semaine">Semaine</button>
+          <button data-val="mois" class="on">Mois</button>
+          <button data-val="trimestre">Trim.</button>
+          <button data-val="annee">Année</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Comparaison</span>
+        <div class="seg" data-seg="axe">
+          <button data-val="global" class="on">Global</button>
+          <button data-val="equipe">Équipe</button>
+          <button data-val="reference">Référence</button>
+          <button data-val="operateur">Opérateur</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Indicateur</span>
+        <select id="an-indicateur">
+          <option value="trs">TRS Global</option>
+          <option value="performance">Taux de performance</option>
+          <option value="disponibilite">Disponibilité (IoT)</option>
+          <option value="tauxRebuts">Taux de rebuts</option>
+          <option value="prodBonne">Production bonne</option>
+          <option value="prodTotale">Production totale</option>
+          <option value="rebuts">Rebuts</option>
+          <option value="arrets">Temps d'arrêt</option>
+        </select>
+      </div>
+      <span id="an-info" style="font-size:11px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPI période -->
+    <div class="kpi-band" id="an-kpis" style="grid-template-columns:repeat(5,1fr);"></div>
+
+    <!-- Graphique d'évolution -->
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="panel-header"><span class="panel-title" id="an-chart-title">Évolution</span></div>
+      <div class="panel-body"><canvas id="an-chart"></canvas></div>
+    </div>
+
+    <!-- Tableau croisé -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Tableau croisé · période × série</span>
+        <button class="btn-apply" onclick="analyseExportCSV()" style="padding:4px 12px;">Exporter CSV</button>
+      </div>
+      <div class="table-wrap" id="an-table-wrap" style="padding:0;"></div>
+    </div>
+  </div>
+  <!-- =================== FIN BLOC ANALYSE =================== -->
 </main>
 
 <script src="shared.js"></script>
@@ -475,6 +549,156 @@ function afficherHistorique() {
         </tr>`;
     }).join('');
 }
+
+// ══════════════════════════════════════════════════════════════
+// MODE ANALYSE
+// ══════════════════════════════════════════════════════════════
+const AN = { gran:'mois', axe:'global', ind:'trs' };
+
+function analyseToggle() {
+    const bloc = document.getElementById('bloc-analyse');
+    const suivi = document.getElementById('bloc-suivi');
+    const btn = document.getElementById('btn-analyse');
+    const actif = bloc.style.display === 'none' || !bloc.style.display;
+    if (actif) {
+        suivi.style.display = 'none';
+        bloc.style.display = 'block';
+        btn.textContent = '📉 Suivi';
+        btn.style.background = 'var(--accent)';
+        btn.style.color = '#fff';
+        analyseInitDates();
+        analyseRender();
+    } else {
+        bloc.style.display = 'none';
+        suivi.style.display = 'block';
+        btn.textContent = '🔬 Analyse';
+        btn.style.background = 'none';
+        btn.style.color = 'var(--accent)';
+    }
+}
+
+// Initialise la plage de dates sur min/max des données chargées (une seule fois)
+function analyseInitDates() {
+    const dDeb = document.getElementById('an-debut');
+    const dFin = document.getElementById('an-fin');
+    if (dDeb.value && dFin.value) return;
+    const dates = donneesCompletes.map(l => normaliserDate(l['Date'])).filter(d => d && d.length >= 8).sort();
+    if (dates.length) {
+        dDeb.value = dates[0];
+        dFin.value = dates[dates.length - 1];
+    } else {
+        const today = new Date().toISOString().split('T')[0];
+        dDeb.value = today; dFin.value = today;
+    }
+}
+
+function analyseGetLignes() {
+    const debut = document.getElementById('an-debut').value;
+    const fin   = document.getElementById('an-fin').value;
+    return filtrerDonnees(debut || null, fin || null, null);
+}
+
+function analyseRender() {
+    const lignes = analyseGetLignes();
+    const info = document.getElementById('an-info');
+    if (!lignes.length) {
+        if (charts.analyse) { charts.analyse.destroy(); delete charts.analyse; }
+        document.getElementById('an-table-wrap').innerHTML =
+            '<div style="padding:20px;text-align:center;color:var(--muted);">Aucune donnée sur la période sélectionnée.</div>';
+        document.getElementById('an-kpis').innerHTML = '';
+        info.textContent = '';
+        return;
+    }
+    const res = analyseAgreger(lignes, AN.gran, AN.axe);
+    const meta = ANALYSE_INDIC[AN.ind];
+    document.getElementById('an-chart-title').textContent = `Évolution · ${meta.label}`;
+    info.textContent = `${res.buckets.length} période(s) · ${res.series.length} série(s) · ${lignes.length} lignes`;
+
+    analyseChartEvolution('an-chart', res, AN.ind);
+    analyseTable(res);
+    analyseKpis(res);
+}
+
+function analyseKpis(res) {
+    const g = analyseFusion(res);
+    const totale = g.bonne + g.rebuts;
+    const f = (v, u='%') => v === null ? 'n/d' : v.toFixed(1) + u;
+    const cards = [
+        { cls:'ok',     label:'Production totale', val: totale.toLocaleString('fr-FR'), sub:`dont ${g.bonne.toLocaleString('fr-FR')} bonnes` },
+        { cls:'warn',   label:'Taux de rebuts',    val: f(analyseMetrique(g,'tauxRebuts')), sub:`${g.rebuts.toLocaleString('fr-FR')} pcs NC` },
+        { cls:'blue',   label:'TRS Global moyen',  val: f(analyseMetrique(g,'trs')), sub:`Objectif ${objectifs.trs}%` },
+        { cls:'ok',     label:'Performance',       val: f(analyseMetrique(g,'performance')), sub:'vitesse réelle' },
+        { cls:'danger', label:'Disponibilité IoT', val: g.iotPresent ? f(analyseMetrique(g,'disponibilite')) : 'n/d', sub:`${Math.round(g.arretsTotal).toLocaleString('fr-FR')} min arrêts décl.` }
+    ];
+    document.getElementById('an-kpis').innerHTML = cards.map(c => `
+        <div class="kpi-card ${c.cls}">
+          <div class="kpi-label">${c.label}</div>
+          <div class="kpi-value ${c.cls}">${c.val}</div>
+          <div class="kpi-sub">${c.sub}</div>
+        </div>`).join('');
+}
+
+function analyseTable(res) {
+    const meta = ANALYSE_INDIC[AN.ind];
+    const fmt = v => v === null ? '—'
+        : meta.unite === '%'   ? v.toFixed(1) + '%'
+        : meta.unite === 'min' ? Math.round(v) + ' min'
+        : Math.round(v).toLocaleString('fr-FR');
+    let html = '<table class="data-table" id="an-table"><thead><tr><th>Période</th>';
+    res.series.forEach(s => { html += `<th>${s}</th>`; });
+    html += '</tr></thead><tbody>';
+    res.buckets.forEach(b => {
+        html += `<tr><td style="font-weight:600;color:var(--text);">${b.label}</td>`;
+        res.series.forEach(s => {
+            const v = analyseMetrique(res.data[b.key] && res.data[b.key][s], AN.ind);
+            let color = 'var(--text)';
+            if (v !== null && meta.unite === '%' && meta.obj && meta.obj() !== null) {
+                const obj = meta.obj();
+                const ok = AN.ind === 'tauxRebuts' ? v <= obj : v >= obj;
+                color = ok ? 'var(--ok)' : 'var(--danger)';
+            }
+            html += `<td style="font-family:var(--mono);color:${color};">${fmt(v)}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('an-table-wrap').innerHTML = html;
+}
+
+function analyseExportCSV() {
+    const table = document.getElementById('an-table');
+    if (!table) { alert('Aucune donnée à exporter.'); return; }
+    let csv = '';
+    table.querySelectorAll('tr').forEach(tr => {
+        csv += Array.from(tr.querySelectorAll('th,td'))
+            .map(c => '"' + c.textContent.replace(/"/g, '""') + '"').join(';') + '\n';
+    });
+    const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `HPH_CP17_Analyse_${AN.ind}_${AN.gran}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// Câblage des contrôles analyse
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#bloc-analyse .seg').forEach(seg => {
+        seg.addEventListener('click', e => {
+            const btn = e.target.closest('button'); if (!btn) return;
+            const groupe = seg.dataset.seg;
+            seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+            btn.classList.add('on');
+            AN[groupe] = btn.dataset.val;
+            analyseRender();
+        });
+    });
+    const sel = document.getElementById('an-indicateur');
+    if (sel) sel.addEventListener('change', () => { AN.ind = sel.value; analyseRender(); });
+    ['an-debut','an-fin'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', analyseRender);
+    });
+});
 </script>
 
 <!-- MODALE FORMULES -->
@@ -567,6 +791,34 @@ function afficherHistorique() {
         <div style="color:var(--muted);font-size:11px;">Écart entre le temps d'arrêt mesuré par l'Opta et le temps d'arrêt déclaré par l'opératrice. Un TNJ élevé signifie que la machine était à l'arrêt sans que l'opératrice l'ait justifié dans la saisie.</div>
       </div>
 
+      <!-- SECTION ANALYSE MULTI-PÉRIODE -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        Analyse multi-période <span style="flex:1;height:1px;background:var(--border);display:inline-block;"></span>
+      </div>
+
+      <div style="border-left:3px solid var(--purple);padding:10px 14px;margin-bottom:14px;background:rgba(167,139,250,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">Principe</div>
+        <div style="color:var(--muted);font-size:11px;">Le mode Analyse agrège les saisies sur une plage de dates selon une granularité (jour / semaine ISO / mois / trimestre / année) et un axe de comparaison (global / équipe / référence / opérateur). Chaque valeur est calculée par regroupement, indépendamment du suivi journalier.</div>
+      </div>
+
+      <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">TRS Global agrégé (%)</div>
+        <div style="font-family:var(--mono);color:var(--blue);margin-bottom:5px;font-size:13px;">Σ(Prod Bonne + Rebuts) / Σ(Cadence_Max_pcs × Durée_réelle_équipe) × 100</div>
+        <div style="color:var(--muted);font-size:11px;">Contrairement au TRS du suivi (basé sur les heures saisies), l'analyse pondère par la <strong>durée réelle de chaque équipe</strong> (via getDureeEquipe : lundi 7 h, vendredi soir 7 h, etc.) répartie sur les heures saisies. La cadence est prise <strong>référence par référence</strong> (Cadence_Max × nb empreintes de l'article). Un TRS d'analyse peut donc être un peu plus bas que le TRS instantané — c'est voulu : il mesure le rendement sur tout le temps d'ouverture.</div>
+      </div>
+
+      <div style="border-left:3px solid var(--purple);padding:10px 14px;margin-bottom:14px;background:rgba(167,139,250,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">Taux de performance agrégé (%)</div>
+        <div style="font-family:var(--mono);color:var(--purple);margin-bottom:5px;font-size:13px;">Σ(Prod Totale) / Σ(Cadence_Max_pcs × Temps_de_marche) × 100</div>
+        <div style="color:var(--muted);font-size:11px;">Temps de marche = temps de fonctionnement réel IoT (ALLUMAGE→EXTINCTION) quand les données Opta sont disponibles sur la période ; sinon repli sur (durée − arrêts déclarés). Plafonné à 150%.</div>
+      </div>
+
+      <div style="border-left:3px solid var(--ok);padding:10px 14px;margin-bottom:24px;background:rgba(45,212,160,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">Disponibilité IoT agrégée (%)</div>
+        <div style="font-family:var(--mono);color:var(--ok);margin-bottom:5px;font-size:13px;">Σ(Temps de marche IoT) / Σ(Durée_réelle_équipe) × 100</div>
+        <div style="color:var(--muted);font-size:11px;">Calculée uniquement sur les shifts couverts par l'IoT (affiche « n/d » avant le déploiement Opta). Décompose le TRS avec la performance et la qualité : TRS ≈ Disponibilité × Performance × Qualité.</div>
+      </div>
+
       <!-- SECTION FLUX DE DONNÉES -->
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
         Flux de données <span style="flex:1;height:1px;background:var(--border);display:inline-block;"></span>
@@ -613,6 +865,68 @@ function afficherHistorique() {
           <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">10</span>
           <div><span style="color:var(--text);">Dashboard Production → auto-refresh 30 min · today + équipe auto · Dashboard Manager → rechargement à chaque changement de filtre date</span></div>
         </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODALE FONCTIONNEMENT ANALYSE -->
+<div id="modal-analyse" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:28px 32px;max-width:760px;width:95%;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
+      <h2 style="font-size:15px;font-weight:700;color:var(--text);">🔬 Mode Analyse — règles & fonctionnement</h2>
+      <button onclick="document.getElementById('modal-analyse').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:0;font-size:13px;">
+
+      <!-- Comment ça marche -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        Comment ça marche <span style="flex:1;height:1px;background:var(--border);display:inline-block;"></span>
+      </div>
+      <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;color:var(--muted);font-size:12px;line-height:1.6;">
+        L'analyse agrège les saisies sur la <strong style="color:var(--text);">plage de dates</strong> choisie (initialisée automatiquement sur la première et la dernière date disponibles). On combine librement :
+        <div style="margin-top:8px;">
+          • <strong style="color:var(--text);">Granularité</strong> — regroupe l'axe du temps : Jour, Semaine (ISO), Mois, Trimestre, Année.<br>
+          • <strong style="color:var(--text);">Comparaison</strong> — superpose des séries : Global, par Équipe, par Référence, ou par Opérateur (trigramme).<br>
+          • <strong style="color:var(--text);">Indicateur</strong> — la grandeur affichée dans le graphique et le tableau croisé.
+        </div>
+        <div style="margin-top:8px;">Le tableau croisé (période × série) est <strong style="color:var(--text);">exportable en CSV</strong>. Ses cellules passent en <span style="color:var(--ok);">vert</span> / <span style="color:var(--danger);">rouge</span> selon l'objectif pour le TRS, la performance et le taux de rebuts.</div>
+      </div>
+
+      <!-- Règles de calcul choisies -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        Règles de calcul retenues <span style="flex:1;height:1px;background:var(--border);display:inline-block;"></span>
+      </div>
+
+      <div style="border-left:3px solid var(--accent);padding:10px 14px;margin-bottom:14px;background:rgba(232,80,42,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">① TRS pondéré par la durée réelle d'équipe</div>
+        <div style="font-family:var(--mono);color:var(--accent);margin-bottom:5px;font-size:13px;">Σ(Prod Bonne + Rebuts) / Σ(Cadence_Max_pcs × Durée_réelle_équipe) × 100</div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.6;">Choix retenu : la durée est celle <strong style="color:var(--text);">réelle de chaque équipe</strong> (getDureeEquipe — lundi 7 h, vendredi soir 7 h…), et non les 480 min fixes ni seulement les heures saisies. Un TRS d'analyse peut donc être un peu plus bas que le TRS instantané du suivi : c'est voulu, il mesure le rendement sur tout le temps d'ouverture. <span style="color:var(--warn);">Plafonné à 150%.</span></div>
+      </div>
+
+      <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">② Cadence prise référence par référence</div>
+        <div style="font-family:var(--mono);color:var(--blue);margin-bottom:5px;font-size:13px;">Cadence_Max_pcs = getCadenceMaxEffective × Nb_empreintes (par article)</div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.6;">Chaque heure est valorisée avec la cadence de <strong style="color:var(--text);">sa propre référence</strong> (IoT temps réel pour le jour J, sinon Cadence_Instantanee_Max historique). Cohérent avec le TRS du suivi journalier.</div>
+      </div>
+
+      <div style="border-left:3px solid var(--purple);padding:10px 14px;margin-bottom:14px;background:rgba(167,139,250,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">③ Performance</div>
+        <div style="font-family:var(--mono);color:var(--purple);margin-bottom:5px;font-size:13px;">Σ(Prod Totale) / Σ(Cadence_Max_pcs × Temps_de_marche) × 100</div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.6;">Temps de marche = fonctionnement réel IoT (ALLUMAGE→EXTINCTION) si les données Opta existent sur la période ; sinon repli sur (durée − arrêts déclarés). <span style="color:var(--warn);">Plafonné à 150%.</span></div>
+      </div>
+
+      <div style="border-left:3px solid var(--ok);padding:10px 14px;margin-bottom:14px;background:rgba(45,212,160,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">④ Disponibilité IoT</div>
+        <div style="font-family:var(--mono);color:var(--ok);margin-bottom:5px;font-size:13px;">Σ(Temps de marche IoT) / Σ(Durée_réelle_équipe) × 100</div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.6;">Calculée <strong style="color:var(--text);">uniquement sur les shifts couverts par l'IoT</strong> (affiche « n/d » avant le déploiement Opta). Permet la décomposition classique <strong style="color:var(--text);">TRS ≈ Disponibilité × Performance × Qualité</strong>.</div>
+      </div>
+
+      <div style="border-left:3px solid var(--warn);padding:10px 14px;margin-bottom:8px;background:rgba(240,180,41,.04);border-radius:0 4px 4px 0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">⑤ Découpage horaire & bon à savoir</div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.6;">Le temps de marche IoT est découpé aux frontières d'heure pour ne jamais dépasser 60 min/heure. En mode Analyse, le bouton <strong style="color:var(--text);">Actualiser</strong> recharge les données mais ne rafraîchit pas la vue : changez un contrôle ou rebasculez pour recalculer. Les définitions complètes des indicateurs figurent aussi dans <span style="color:var(--blue);cursor:pointer;" onclick="document.getElementById('modal-analyse').style.display='none';document.getElementById('modal-info').style.display='flex'">ℹ️ Info</span>.</div>
       </div>
 
     </div>
