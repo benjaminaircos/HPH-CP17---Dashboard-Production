@@ -208,6 +208,14 @@
         </div>
       </div>
       <div class="filter-group">
+        <span class="filter-label">Vue rapide</span>
+        <div class="seg">
+          <button type="button" onclick="analyseVueRapide('semaine')">Semaine</button>
+          <button type="button" onclick="analyseVueRapide('mois')">Mois</button>
+          <button type="button" onclick="analyseVueRapide('annee')">Année</button>
+        </div>
+      </div>
+      <div class="filter-group">
         <span class="filter-label">Comparaison</span>
         <div class="seg" data-seg="axe">
           <button data-val="global" class="on">Global</button>
@@ -635,6 +643,33 @@ function analyseSeries(visible) {
     ch.update();
 }
 
+// Met à jour la granularité + surligne le bon bouton
+function analyseSetGran(g) {
+    AN.gran = g;
+    document.querySelectorAll('#bloc-analyse .seg[data-seg="gran"] button')
+        .forEach(b => b.classList.toggle('on', b.dataset.val === g));
+}
+
+// Vue rapide : règle la plage ET le découpage en un clic
+function analyseVueRapide(type) {
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const today = new Date();
+    const annee = document.getElementById('an-annee').value;
+    if (type === 'annee') {
+        // Toutes les années disponibles, comparées entre elles
+        const dates = donneesCompletes.map(l => normaliserDate(l['Date'])).filter(d => d && d.length >= 8).sort();
+        document.getElementById('an-debut').value = dates[0] || `${annee}-01-01`;
+        document.getElementById('an-fin').value = dates.length ? dates[dates.length - 1] : iso(today);
+        analyseSetGran('annee');
+    } else {
+        // Semaine ou Mois : sur l'année sélectionnée
+        document.getElementById('an-debut').value = `${annee}-01-01`;
+        document.getElementById('an-fin').value = (parseInt(annee, 10) === today.getFullYear()) ? iso(today) : `${annee}-12-31`;
+        analyseSetGran(type);
+    }
+    analyseRender();
+}
+
 function analyseGetLignes() {
     const debut = document.getElementById('an-debut').value;
     const fin   = document.getElementById('an-fin').value;
@@ -936,6 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
           • <strong style="color:var(--text);">Année</strong> — cale la plage sur toute l'année choisie (bornée à aujourd'hui pour l'année en cours). Ex : 2026 + granularité Mois = janvier → juillet.<br>
           • <strong style="color:var(--text);">Du … au …</strong> — la fenêtre analysée : une date de début et une date de fin. Le sélecteur Année la remplit automatiquement ; on peut aussi la régler à la main pour une période sur mesure.<br>
           • <strong style="color:var(--text);">Granularité</strong> — découpe cette fenêtre sur l'axe du temps : Jour, Semaine (ISO), Mois.<br>
+          • <strong style="color:var(--text);">Vue rapide</strong> — règle plage + découpage en un clic : <em>Mois</em> = l'année choisie par mois, <em>Semaine</em> = l'année choisie par semaine, <em>Année</em> = toutes les années comparées entre elles.<br>
           • <strong style="color:var(--text);">Comparaison</strong> — superpose des séries : Global, par Équipe, par Référence, ou par Opérateur (trigramme). Avec plusieurs séries, le graphique passe en barres groupées ; les boutons <em>Tout afficher / Tout masquer</em> et la légende permettent de n'afficher que les séries voulues.<br>
           • <strong style="color:var(--text);">Indicateur</strong> — la grandeur affichée dans le graphique et le tableau croisé.
         </div>
