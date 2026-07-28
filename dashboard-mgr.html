@@ -190,6 +190,10 @@
     <!-- Contrôles -->
     <div class="filter-bar" style="border-radius:6px;border:1px solid var(--border);flex-wrap:wrap;gap:18px;">
       <div class="filter-group">
+        <span class="filter-label">Année</span>
+        <select id="an-annee"></select>
+      </div>
+      <div class="filter-group">
         <span class="filter-label">Du</span>
         <input type="date" id="an-debut">
         <span class="filter-label">au</span>
@@ -201,14 +205,6 @@
           <button data-val="jour">Jour</button>
           <button data-val="semaine">Semaine</button>
           <button data-val="mois" class="on">Mois</button>
-        </div>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Raccourci</span>
-        <div class="seg">
-          <button type="button" onclick="analyseRaccourci('semaine')">Semaine</button>
-          <button type="button" onclick="analyseRaccourci('mois')">Mois</button>
-          <button type="button" onclick="analyseRaccourci('annee')">Année</button>
         </div>
       </div>
       <div class="filter-group">
@@ -241,7 +237,13 @@
 
     <!-- Graphique d'évolution -->
     <div class="panel" style="margin-bottom:14px;">
-      <div class="panel-header"><span class="panel-title" id="an-chart-title">Évolution</span></div>
+      <div class="panel-header">
+        <span class="panel-title" id="an-chart-title">Évolution</span>
+        <span style="display:flex;gap:6px;">
+          <button class="btn-reset" onclick="analyseSeries(true)" style="padding:3px 10px;">Tout afficher</button>
+          <button class="btn-reset" onclick="analyseSeries(false)" style="padding:3px 10px;">Tout masquer</button>
+        </span>
+      </div>
       <div class="panel-body"><canvas id="an-chart"></canvas></div>
     </div>
 
@@ -593,39 +595,44 @@ function analyseToggle() {
     }
 }
 
-// Initialise la plage de dates sur min/max des données chargées (une seule fois)
+// Remplit le sélecteur d'année (années présentes dans les données + année en cours),
+// et cale la plage sur l'année la plus récente disponible (une seule fois)
 function analyseInitDates() {
-    const dDeb = document.getElementById('an-debut');
-    const dFin = document.getElementById('an-fin');
-    if (dDeb.value && dFin.value) return;
-    const dates = donneesCompletes.map(l => normaliserDate(l['Date'])).filter(d => d && d.length >= 8).sort();
-    if (dates.length) {
-        dDeb.value = dates[0];
-        dFin.value = dates[dates.length - 1];
-    } else {
-        const today = new Date().toISOString().split('T')[0];
-        dDeb.value = today; dFin.value = today;
+    const sel = document.getElementById('an-annee');
+    if (sel && !sel.options.length) {
+        const anneesData = Array.from(new Set(
+            donneesCompletes.map(l => (normaliserDate(l['Date']) || '').slice(0, 4)).filter(a => a.length === 4)
+        )).sort();
+        const cur = new Date().getFullYear();
+        const toutes = Array.from(new Set([...anneesData, String(cur), String(cur + 1)]))
+            .filter(a => a >= '2020').sort();
+        sel.innerHTML = toutes.map(a => `<option value="${a}">${a}</option>`).join('');
+        const defaut = anneesData.length ? anneesData[anneesData.length - 1] : String(cur);
+        sel.value = defaut;
+        analyseSetAnnee(defaut, false);
     }
 }
 
-// Raccourcis de période : remplissent « Du … au … » (jusqu'à aujourd'hui)
-function analyseRaccourci(type) {
+// Cale la plage « Du … au … » sur toute l'année choisie (bornée à aujourd'hui pour l'année en cours)
+function analyseSetAnnee(annee, rerender = true) {
     const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const today = new Date();
-    let debut;
-    if (type === 'semaine') {                         // lundi de la semaine en cours
-        const jour = (today.getDay() + 6) % 7;        // lundi=0 … dimanche=6
-        const lundi = new Date(today);
-        lundi.setDate(today.getDate() - jour);
-        debut = iso(lundi);
-    } else if (type === 'mois') {                      // 1er du mois en cours
-        debut = iso(new Date(today.getFullYear(), today.getMonth(), 1));
-    } else {                                           // 1er janvier de l'année en cours
-        debut = iso(new Date(today.getFullYear(), 0, 1));
-    }
+    const debut = `${annee}-01-01`;
+    const fin = (parseInt(annee, 10) === today.getFullYear()) ? iso(today) : `${annee}-12-31`;
     document.getElementById('an-debut').value = debut;
-    document.getElementById('an-fin').value = iso(today);
-    analyseRender();
+    document.getElementById('an-fin').value = fin;
+    if (rerender) analyseRender();
+}
+
+// Affiche / masque toutes les séries du graphique d'un coup (hors ligne d'objectif)
+function analyseSeries(visible) {
+    const ch = charts.analyse;
+    if (!ch) return;
+    ch.data.datasets.forEach((ds, i) => {
+        if (ds.label && ds.label.startsWith('Objectif')) return;
+        ch.setDatasetVisibility(i, visible);
+    });
+    ch.update();
 }
 
 function analyseGetLignes() {
@@ -730,6 +737,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const sel = document.getElementById('an-indicateur');
     if (sel) sel.addEventListener('change', () => { AN.ind = sel.value; analyseRender(); });
+    const selAnnee = document.getElementById('an-annee');
+    if (selAnnee) selAnnee.addEventListener('change', () => analyseSetAnnee(selAnnee.value, true));
     ['an-debut','an-fin'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', analyseRender);
@@ -834,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div style="border-left:3px solid var(--purple);padding:10px 14px;margin-bottom:14px;background:rgba(167,139,250,.04);border-radius:0 4px 4px 0;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;">Principe</div>
-        <div style="color:var(--muted);font-size:11px;">Le mode Analyse agrège les saisies sur une plage de dates selon une granularité (jour / semaine ISO / mois) et un axe de comparaison (global / équipe / référence / opérateur). Des raccourcis (semaine / mois / année en cours) remplissent automatiquement la plage. Chaque valeur est calculée par regroupement, indépendamment du suivi journalier.</div>
+        <div style="color:var(--muted);font-size:11px;">Le mode Analyse agrège les saisies sur une plage de dates selon une granularité (jour / semaine ISO / mois) et un axe de comparaison (global / équipe / référence / opérateur). Un sélecteur d'année cale la plage sur toute l'année choisie. Chaque valeur est calculée par regroupement, indépendamment du suivi journalier.</div>
       </div>
 
       <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;">
@@ -924,9 +933,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="border-left:3px solid var(--blue);padding:10px 14px;margin-bottom:14px;background:rgba(55,138,221,.04);border-radius:0 4px 4px 0;color:var(--muted);font-size:12px;line-height:1.6;">
         L'analyse agrège les saisies sur la <strong style="color:var(--text);">plage de dates</strong> choisie (initialisée automatiquement sur la première et la dernière date disponibles). On combine librement :
         <div style="margin-top:8px;">
-          • <strong style="color:var(--text);">Granularité</strong> — regroupe l'axe du temps : Jour, Semaine (ISO), Mois.<br>
-          • <strong style="color:var(--text);">Raccourci</strong> — remplit la plage « Du … au … » sur la semaine, le mois ou l'année en cours (jusqu'à aujourd'hui). Indépendant de la granularité.<br>
-          • <strong style="color:var(--text);">Comparaison</strong> — superpose des séries : Global, par Équipe, par Référence, ou par Opérateur (trigramme).<br>
+          • <strong style="color:var(--text);">Année</strong> — cale la plage sur toute l'année choisie (bornée à aujourd'hui pour l'année en cours). Ex : 2026 + granularité Mois = janvier → juillet.<br>
+          • <strong style="color:var(--text);">Du … au …</strong> — la fenêtre analysée : une date de début et une date de fin. Le sélecteur Année la remplit automatiquement ; on peut aussi la régler à la main pour une période sur mesure.<br>
+          • <strong style="color:var(--text);">Granularité</strong> — découpe cette fenêtre sur l'axe du temps : Jour, Semaine (ISO), Mois.<br>
+          • <strong style="color:var(--text);">Comparaison</strong> — superpose des séries : Global, par Équipe, par Référence, ou par Opérateur (trigramme). Avec plusieurs séries, le graphique passe en barres groupées ; les boutons <em>Tout afficher / Tout masquer</em> et la légende permettent de n'afficher que les séries voulues.<br>
           • <strong style="color:var(--text);">Indicateur</strong> — la grandeur affichée dans le graphique et le tableau croisé.
         </div>
         <div style="margin-top:8px;">Le tableau croisé (période × série) est <strong style="color:var(--text);">exportable en CSV</strong>. Ses cellules passent en <span style="color:var(--ok);">vert</span> / <span style="color:var(--danger);">rouge</span> selon l'objectif pour le TRS, la performance et le taux de rebuts.</div>

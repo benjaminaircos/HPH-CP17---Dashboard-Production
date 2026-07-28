@@ -813,26 +813,33 @@ function analyseChartEvolution(canvasId, res, ind) {
     const meta = ANALYSE_INDIC[ind];
     const labels = res.buckets.map(b => b.label);
     const monoSerie = res.series.length === 1 && res.series[0] === 'Global';
+    // Plusieurs séries → barres groupées (plus lisible) ; série unique → type de l'indicateur
+    const multi = res.series.length > 1;
+    const chartType = multi ? 'bar' : meta.type;
 
+    let maxVal = 0;
     const datasets = res.series.map((serie, i) => {
         const col = ANALYSE_PALETTE[i % ANALYSE_PALETTE.length];
         const vals = res.buckets.map(b => {
             const v = analyseMetrique(res.data[b.key] && res.data[b.key][serie], ind);
+            if (v !== null && v > maxVal) maxVal = v;
             return v === null ? null : Math.round(v * 10) / 10;
         });
         return {
             label: monoSerie ? meta.label : serie,
             data: vals,
-            backgroundColor: meta.type === 'bar' ? col + 'bb' : col + '22',
+            backgroundColor: chartType === 'bar' ? col + 'cc' : col + '22',
             borderColor: col,
-            borderWidth: 2, borderRadius: meta.type === 'bar' ? 3 : 0,
-            pointRadius: meta.type === 'line' ? 3 : 0,
+            borderWidth: chartType === 'bar' ? 0 : 2,
+            borderRadius: chartType === 'bar' ? 3 : 0,
+            pointRadius: chartType === 'line' ? 3 : 0,
             fill: false, tension: 0.25, spanGaps: true
         };
     });
 
     const objVal = meta.obj ? meta.obj() : null;
     if (objVal !== null && objVal !== undefined) {
+        if (objVal > maxVal) maxVal = objVal;
         datasets.push({
             label: `Objectif (${objVal}${meta.unite})`,
             data: labels.map(() => objVal), type: 'line',
@@ -841,7 +848,11 @@ function analyseChartEvolution(canvasId, res, ind) {
         });
     }
 
-    const yMax = meta.unite === '%' ? (ind === 'disponibilite' ? 120 : 170) : null;
+    // Échelle Y adaptée aux données (10% de marge, arrondi à la dizaine) ; auto pour les volumes
+    let yMax = null;
+    if (meta.unite === '%') {
+        yMax = Math.max(20, Math.ceil((maxVal * 1.1) / 10) * 10);
+    }
     const opts = baseChartOpts(`${meta.label} (${meta.unite})`, yMax);
     if (meta.unite === '%') opts.scales.y.ticks = { ...opts.scales.y.ticks, callback: v => v + '%' };
     opts.plugins = {
@@ -850,5 +861,5 @@ function analyseChartEvolution(canvasId, res, ind) {
     };
     opts.scales.x.ticks = { ...opts.scales.x.ticks, maxRotation: 45 };
 
-    makeOrUpdate('analyse', canvasId, { type: meta.type, data: { labels, datasets }, options: opts });
+    makeOrUpdate('analyse', canvasId, { type: chartType, data: { labels, datasets }, options: opts });
 }
