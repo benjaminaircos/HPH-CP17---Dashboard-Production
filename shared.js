@@ -679,11 +679,19 @@ function analyseBucketKey(dateISO, gran) {
     return { key:`${y}-${m}`, label:`${noms[parseInt(m,10)-1]} ${String(y).slice(2)}` };
 }
 
-function analyseSerieKey(l, axe) {
+function analyseAxeValue(l, axe) {
     if (axe === 'equipe')    return ((l['Équipe'] || l['Equipe'] || '—') + '').trim() || '—';
     if (axe === 'reference') return ((l['Référence'] || l['Reference'] || '—') + '').trim().toUpperCase() || '—';
     if (axe === 'operateur') return ((l['Trigramme'] || l['Jour'] || '—') + '').trim().toUpperCase() || '—';
     return 'Global';
+}
+
+// axes : tableau d'axes actifs (ex. ['reference','operateur']) → clé combinée « U556003 · PRO »
+// Accepte aussi une chaîne unique pour compatibilité.
+function analyseSerieKey(l, axes) {
+    if (typeof axes === 'string') axes = (axes === 'global' || !axes) ? [] : [axes];
+    if (!axes || !axes.length) return 'Global';
+    return axes.map(a => analyseAxeValue(l, a)).join(' · ');
 }
 
 function analyseArretLigne(l) {

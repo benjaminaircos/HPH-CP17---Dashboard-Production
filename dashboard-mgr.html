@@ -262,6 +262,11 @@
         <button class="btn-apply" onclick="analyseExportCSV()" style="padding:4px 12px;">Exporter CSV</button>
       </div>
       <div class="table-wrap" id="an-table-wrap" style="padding:0;"></div>
+      <div style="padding:8px 14px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);">
+        <span style="color:var(--ok);">■</span> objectif atteint &nbsp;·&nbsp;
+        <span style="color:var(--danger);">■</span> objectif manqué &nbsp;—&nbsp;
+        s'applique au TRS, à la performance (≥ objectif) et au taux de rebuts (≤ objectif).
+      </div>
     </div>
   </div>
   <!-- =================== FIN BLOC ANALYSE =================== -->
@@ -571,7 +576,7 @@ function afficherHistorique() {
 // ══════════════════════════════════════════════════════════════
 // MODE ANALYSE
 // ══════════════════════════════════════════════════════════════
-const AN = { gran:'mois', axe:'global', ind:'trs' };
+const AN = { gran:'mois', axes:[], ind:'trs' };
 
 function analyseToggle() {
     const bloc = document.getElementById('bloc-analyse');
@@ -687,7 +692,7 @@ function analyseRender() {
         info.textContent = '';
         return;
     }
-    const res = analyseAgreger(lignes, AN.gran, AN.axe);
+    const res = analyseAgreger(lignes, AN.gran, AN.axes);
     const meta = ANALYSE_INDIC[AN.ind];
     document.getElementById('an-chart-title').textContent = `Évolution · ${meta.label}`;
     info.textContent = `${res.buckets.length} période(s) · ${res.series.length} série(s) · ${lignes.length} lignes`;
@@ -718,20 +723,23 @@ function analyseKpis(res) {
 
 function analyseTable(res) {
     const meta = ANALYSE_INDIC[AN.ind];
+    const obj = meta.obj ? meta.obj() : null;
+    const hasObj = (meta.unite === '%' && obj !== null && obj !== undefined);
     const fmt = v => v === null ? '—'
         : meta.unite === '%'   ? v.toFixed(1) + '%'
         : meta.unite === 'min' ? Math.round(v) + ' min'
         : Math.round(v).toLocaleString('fr-FR');
     let html = '<table class="data-table" id="an-table"><thead><tr><th>Période</th>';
+    if (hasObj) html += '<th style="color:var(--warn);">Objectif</th>';
     res.series.forEach(s => { html += `<th>${s}</th>`; });
     html += '</tr></thead><tbody>';
     res.buckets.forEach(b => {
         html += `<tr><td style="font-weight:600;color:var(--text);">${b.label}</td>`;
+        if (hasObj) html += `<td style="font-family:var(--mono);color:var(--warn);border-right:2px solid var(--border);">${obj}%</td>`;
         res.series.forEach(s => {
             const v = analyseMetrique(res.data[b.key] && res.data[b.key][s], AN.ind);
             let color = 'var(--text)';
-            if (v !== null && meta.unite === '%' && meta.obj && meta.obj() !== null) {
-                const obj = meta.obj();
+            if (v !== null && hasObj) {
                 const ok = AN.ind === 'tauxRebuts' ? v <= obj : v >= obj;
                 color = ok ? 'var(--ok)' : 'var(--danger)';
             }
@@ -760,15 +768,30 @@ function analyseExportCSV() {
 
 // Câblage des contrôles analyse
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('#bloc-analyse .seg').forEach(seg => {
-        seg.addEventListener('click', e => {
-            const btn = e.target.closest('button'); if (!btn) return;
-            const groupe = seg.dataset.seg;
-            seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-            btn.classList.add('on');
-            AN[groupe] = btn.dataset.val;
-            analyseRender();
+    // Granularité : sélection simple
+    const segGran = document.querySelector('#bloc-analyse .seg[data-seg="gran"]');
+    if (segGran) segGran.addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        analyseSetGran(btn.dataset.val);
+        analyseRender();
+    });
+    // Comparaison : sélection MULTIPLE (Global = exclusif, les autres se cumulent)
+    const segAxe = document.querySelector('#bloc-analyse .seg[data-seg="axe"]');
+    if (segAxe) segAxe.addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        const val = btn.dataset.val;
+        if (val === 'global') {
+            AN.axes = [];
+        } else {
+            const i = AN.axes.indexOf(val);
+            if (i >= 0) AN.axes.splice(i, 1); else AN.axes.push(val);
+        }
+        // Mise à jour des surlignages
+        segAxe.querySelectorAll('button').forEach(b => {
+            if (b.dataset.val === 'global') b.classList.toggle('on', AN.axes.length === 0);
+            else b.classList.toggle('on', AN.axes.includes(b.dataset.val));
         });
+        analyseRender();
     });
     const sel = document.getElementById('an-indicateur');
     if (sel) sel.addEventListener('change', () => { AN.ind = sel.value; analyseRender(); });
